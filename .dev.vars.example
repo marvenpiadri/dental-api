@@ -1,0 +1,3 @@
+# Copy this file to .dev.vars and add your TiDB Cloud Serverless connection URL.
+# Never commit the real .dev.vars file.
+TIDB_DATABASE_URL="mysql://USERNAME:PASSWORD@HOST/DATABASE"
