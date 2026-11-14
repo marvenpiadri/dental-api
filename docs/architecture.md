@@ -266,11 +266,11 @@ Consistency rules the API enforces and the frontend already assumes: an invoice 
 
 **Deployment.** Two Workers (Paid plan): `dontalist-api` (Hono, custom domain `api.dontalist.com`) and the Angular SSR Worker (`dontalist.com`, service binding `API`). Wrangler config in each repo, `nodejs_compat` **off** unless a dependency proves it needs it (the API's own dependencies are Hono and `@tidbcloud/serverless`; the Angular entry needs none). Environments: `dev` (local, `.dev.vars`, scratch TiDB database + dev R2 bucket), `staging`, `production`. Staging uses a separate TiDB database (not the `sys` database; production uses `dontalist`).
 
-**Secrets** (Worker secrets, never in git): `TIDB_DATABASE_URL`, `PASSWORD_PEPPER`, optional `GOOGLE_MAPS_SERVER_KEY`, R2 S3 credentials only if presigned uploads are adopted. Non-secret config in `vars`: allowed origins, cookie domain. The password in your message is not repeated anywhere in this repository or document.
+**Secrets** (Worker secrets, never in git): `TIDB_DATABASE_URL`, `PASSWORD_PEPPER`, optional `GOOGLE_MAPS_SERVER_KEY`, R2 S3 credentials only if presigned uploads are adopted. Non-secret config in `vars`: allowed origins, cookie domain. No TiDB username or password has been given to me or written anywhere in this repository.
 
 **TLS to TiDB.** The driver uses HTTPS to the TiDB Cloud HTTP gateway; the Worker validates it with Cloudflare's trust store. There is no CA file to install and certificate verification is never disabled. (Verified for the transport; the exact gateway hostname the driver derives from `gateway01…` is confirmed by test T0.)
 
-**Connection check (first action after approval).** Run T0 from your machine (`wrangler dev` with a `.dev.vars` you create), then from the deployed Worker. Do **not** paste the password in chat again; rotate it if it was shared in plaintext beyond this conversation. Use a dedicated least-privilege database user for the API (no DDL), and a separate migration user.
+**Connection check (first action after approval).** Run T0 from your machine (`wrangler dev` with a `.dev.vars` you create), then from the deployed Worker. Do **not** paste the TiDB password into chat. Use a dedicated least-privilege database user for the API (no DDL), and a separate migration user.
 
 **R2 and files.** A private bucket, no public URL. Keys are `c/<clinic_id>/<random>`; the client never supplies a key or clinic. Metadata (id, patient, kind, name, size, sha-256, uploader) lives in `file_object`.
 - *Upload — V1 recommendation:* **stream through the Worker** into the R2 binding (`bucket.put(key, request.body)` with a declared `Content-Length`, max 15 MB, JPEG/PNG/PDF only). It is not buffered, needs no S3 credentials, and keeps authorization in one place. After the write the Worker reads the first bytes with a ranged `get` and deletes the object if the magic bytes do not match the declared type.
@@ -386,4 +386,4 @@ Honest limits: I have run **none** of these against TiDB. In the earlier prototy
 4. PBKDF2 CPU on Workers is unmeasured on the deployed platform.
 5. The IndexedDB import touches clinical and financial history; its verification step is not optional.
 6. Two repositories mean the permission table, the chart payload and the error shapes can drift; contract tests are the only guard.
-7. The cluster password was shared in chat: rotate it, and use a least-privilege runtime user.
+7. A Neon password pasted earlier in this project (provider since dropped) is still exposed and must be rotated. For TiDB, keep credentials out of chat and use a least-privilege runtime user.
