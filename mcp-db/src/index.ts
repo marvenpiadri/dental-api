@@ -4,7 +4,7 @@ import { connect } from '@tidbcloud/serverless'
 import { z } from 'zod'
 import { readOnly, safeEqual, writable } from './guard'
 
-export type Env = { TIDB_DATABASE_URL: string; MCP_TOKEN: string; ALLOW_WRITES?: string }
+export type Env = { TIDB_DATABASE_URL: string; MCP_TOKEN: string; ALLOW_WRITES?: string; ALLOW_PATH_TOKEN?: string }
 export type Sql = { rows(sql: string, params: unknown[]): Promise<unknown[]>; run(sql: string, params: unknown[]): Promise<number> }
 const MAX_ROWS = 200
 
@@ -36,11 +36,17 @@ export function buildServer(env: Env, sql: Sql): McpServer {
 
 export async function handle(req: Request, env: Env, sql: Sql = realSql(env)): Promise<Response> {
   const url = new URL(req.url)
-  if (url.pathname !== '/mcp') return new Response('Not found', { status: 404 })
+  const isPathToken = env.ALLOW_PATH_TOKEN === 'true' && url.pathname.startsWith('/mcp/')
+  if (url.pathname !== '/mcp' && !isPathToken) return new Response('Not found', { status: 404 })
   // Fail closed: no configured token, no service.
   if (!env.MCP_TOKEN || env.MCP_TOKEN.length < 24) return new Response('Service not configured', { status: 503 })
+  // Normal: "Authorization: Bearer <token>" (Claude.ai "Request headers"). Fallback, off by default: the token as the last URL segment,
+  // for accounts that do not have Request headers yet. It can end up in logs and URLs, so it is a weaker mode: use only with a read-only test DB user.
   const m = /^Bearer (.+)$/.exec(req.headers.get('authorization') ?? '')
-  if (!m || !safeEqual(m[1], env.MCP_TOKEN)) return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Bearer' } })
+  const presented = isPathToken ? decodeURIComponent(url.pathname.slice('/mcp/'.length)) : m?.[1]
+  if (!presented || !safeEqual(presented, env.MCP_TOKEN)) return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Bearer' } })
+  // Stateless: no server-initiated stream and no sessions to delete, so only POST is served (the spec allows 405 for GET).
+  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } })
   const server = buildServer(env, sql)
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
   await server.connect(transport)
