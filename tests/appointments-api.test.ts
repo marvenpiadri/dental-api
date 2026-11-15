@@ -20,7 +20,7 @@ beforeAll(async () => {
   for (const c of ['A', 'B']) {
     db.raw.prepare('INSERT INTO clinic (id,name,timezone,created_at) VALUES (?,?,?,?)').run(c, c, 'UTC', t)
     for (const [tbl, pre] of [['patient', 'p'], ['dentist_profile', 'd'], ['chair', 'c']] as const)
-      db.raw.prepare(`INSERT INTO ${tbl} (id,clinic_id,${tbl === 'patient' ? 'full_name,created_at' : 'name'}) VALUES (?,?,?${tbl === 'patient' ? ',?' : ''})`).run(...[pre + c, c, 'x', ...(tbl === 'patient' ? [t] : [])] as never[])
+      db.raw.prepare(`INSERT INTO ${tbl} (id,clinic_id,${tbl === 'patient' ? 'full_name,full_name_norm,created_at' : 'name'}) VALUES (?,?,?${tbl === 'patient' ? ',?,?' : ''})`).run(...[pre + c, c, 'x', ...(tbl === 'patient' ? ['x', t] : [])] as never[])
   }
   for (const [id, clinic, role] of [['recA', 'A', 'reception'], ['acctA', 'A', 'accountant'], ['recB', 'B', 'reception']])
     db.raw.prepare('INSERT INTO staff (id,clinic_id,email_norm,name,role,password_hash,created_at) VALUES (?,?,?,?,?,?,?)').run(id, clinic, `${id.toLowerCase()}@x.test`, id, role, hash, t)

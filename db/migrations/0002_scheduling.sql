@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS patient (
   id          VARCHAR(64)  NOT NULL PRIMARY KEY,
   clinic_id   VARCHAR(64)  NOT NULL,
   full_name   VARCHAR(200) NOT NULL,
+  full_name_norm VARCHAR(200) NOT NULL, -- lowercase, accent-free copy: search and sort never depend on the DB collation (TiDB defaults to case-sensitive)
   phone       VARCHAR(40)  NULL,
   email       VARCHAR(254) NULL,
   birth_date  DATE         NULL,
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS patient (
   notes       VARCHAR(2000) NULL,
   created_at  DATETIME(3)  NOT NULL,
   archived_at DATETIME(3)  NULL,
-  KEY ix_patient_clinic_name (clinic_id, full_name, id)
+  KEY ix_patient_clinic_name (clinic_id, full_name_norm, id)
 );
 
 CREATE TABLE IF NOT EXISTS chair (

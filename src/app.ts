@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { authRoutes } from './auth/routes'
 import { appointmentRoutes } from './appointments/routes'
+import { patientRoutes } from './patients/routes'
 import { getDb } from './db/client'
 import { ApiError, fail } from './http/errors'
 import { base, security } from './http/middleware'
@@ -12,6 +13,7 @@ export function createApp(deps: Deps = { db: (env) => getDb(env) }) {
   app.get('/health', (c) => c.json({ ok: true, service: 'dontalist-api' }))
   app.route('/v1/auth', authRoutes)
   app.route('/v1/appointments', appointmentRoutes)
+  app.route('/v1/patients', patientRoutes)
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {
     // Internal details stay in platform logs, never in the response.
