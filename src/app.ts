@@ -3,6 +3,8 @@ import { authRoutes } from './auth/routes'
 import { appointmentRoutes } from './appointments/routes'
 import { patientRoutes } from './patients/routes'
 import { billingRoutes } from './billing/routes'
+import { teamRoutes } from './team/routes'
+import { resourceRoutes } from './team/resources'
 import { getDb } from './db/client'
 import { ApiError, fail } from './http/errors'
 import { base, security } from './http/middleware'
@@ -15,6 +17,8 @@ export function createApp(deps: Deps = { db: (env) => getDb(env) }) {
   app.route('/v1/auth', authRoutes)
   app.route('/v1/appointments', appointmentRoutes)
   app.route('/v1/patients', patientRoutes)
+  app.route('/v1/staff', teamRoutes)
+  app.route('/v1', resourceRoutes)
   app.route('/v1', billingRoutes)
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {

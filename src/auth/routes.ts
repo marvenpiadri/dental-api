@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { deleteCookie, setCookie } from 'hono/cookie'
-import { hashPassword, needsRehash, verifyPassword, dummyHash } from './password'
+import { hashPassword, needsRehash, validPassword, verifyPassword, dummyHash } from './password'
 import { newId, randomToken, sha256Hex } from '../lib/ids'
 import { fromDb, toDb } from '../lib/time'
 import { ApiError, fail } from '../http/errors'
@@ -51,4 +51,16 @@ authRoutes.post('/logout', authenticate, async (c) => {
 authRoutes.get('/me', authenticate, (c) => {
   const p = c.get('principal')
   return c.json({ id: p.staffId, clinicId: p.clinicId, name: p.name, role: p.role, permissions: [...p.permissions].sort() })
+})
+
+/** Self-service password change. Needs the current password, and signs out every OTHER session. */
+authRoutes.post('/password', authenticate, async (c) => {
+  const b = await c.req.json().catch(() => null) as { current?: unknown; next?: unknown } | null
+  if (!b || typeof b.current !== 'string' || typeof b.next !== 'string' || !validPassword(b.next)) return fail(c, new ApiError(400, 'bad_request', 'Password must be 12 to 200 characters'))
+  const p = c.get('principal'), db = c.get('db')
+  const [u] = await db.rows<{ password_hash: string }>('SELECT password_hash FROM staff WHERE id = ? AND clinic_id = ?', [p.staffId, p.clinicId])
+  if (!u || !(await verifyPassword(b.current, u.password_hash, c.env.PASSWORD_PEPPER))) return fail(c, new ApiError(401, 'invalid_credentials', 'Current password is incorrect'))
+  await db.run('UPDATE staff SET password_hash = ? WHERE id = ? AND clinic_id = ?', [await hashPassword(b.next, c.env.PASSWORD_PEPPER), p.staffId, p.clinicId])
+  await db.run('UPDATE auth_session SET revoked_at = ? WHERE staff_id = ? AND revoked_at IS NULL AND token_hash <> ?', [toDb(c.get('now')), p.staffId, p.sessionHash])
+  return c.body(null, 204)
 })

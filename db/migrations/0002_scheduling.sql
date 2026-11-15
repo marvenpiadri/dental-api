@@ -18,13 +18,13 @@ CREATE TABLE IF NOT EXISTS patient (
 );
 
 CREATE TABLE IF NOT EXISTS chair (
-  id VARCHAR(64) NOT NULL PRIMARY KEY, clinic_id VARCHAR(64) NOT NULL, name VARCHAR(100) NOT NULL, color VARCHAR(16) NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY, clinic_id VARCHAR(64) NOT NULL, name VARCHAR(100) NOT NULL, color VARCHAR(16) NULL, archived_at DATETIME(3) NULL,
   KEY ix_chair_clinic (clinic_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS dentist_profile (
   id VARCHAR(64) NOT NULL PRIMARY KEY, clinic_id VARCHAR(64) NOT NULL, staff_id VARCHAR(64) NULL, name VARCHAR(200) NOT NULL,
-  specialty VARCHAR(100) NULL, color VARCHAR(16) NULL, phone VARCHAR(40) NULL, email VARCHAR(254) NULL, registration VARCHAR(64) NULL,
+  specialty VARCHAR(100) NULL, color VARCHAR(16) NULL, phone VARCHAR(40) NULL, email VARCHAR(254) NULL, registration VARCHAR(64) NULL, archived_at DATETIME(3) NULL,
   KEY ix_dentist_clinic (clinic_id, id)
 );
 
