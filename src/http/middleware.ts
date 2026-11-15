@@ -8,6 +8,7 @@ import { effective, type Permission, type Role } from '../auth/permissions'
 import { sha256Hex } from '../lib/ids'
 import { fromDb, toDb } from '../lib/time'
 import { ApiError, fail } from './errors'
+import type { Db } from '../db/client'
 import type { AppEnv, Deps } from './context'
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -17,7 +18,9 @@ export const CSRF_HEADER = 'x-dontalist-csrf'
 export const base = (deps: Deps) => createMiddleware<AppEnv>(async (c, next) => {
   c.set('requestId', crypto.randomUUID())
   c.set('now', (deps.now ?? Date.now)())
-  try { c.set('config', loadConfig(c.env)); c.set('db', deps.db(c.env)) } catch (e) {
+  try { c.set('config', loadConfig(c.env)); // Lazy: /health and config errors must not need database credentials.
+    let real: Db | undefined; const get = () => (real ??= deps.db(c.env))
+    c.set('db', { rows: (q, p) => get().rows(q, p), run: (q, p) => get().run(q, p) }) } catch (e) {
     console.error('configuration error', c.get('requestId'), e instanceof Error ? e.message : e)
     return fail(c, new ApiError(503, 'unavailable', 'Service unavailable'))
   }

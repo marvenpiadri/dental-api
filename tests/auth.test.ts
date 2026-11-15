@@ -71,7 +71,7 @@ describe('auth', () => {
   })
   it('does not leak internals on errors', async () => {
     const bad = createApp({ db: () => { throw new Error('mysql://user:secret@host') } })
-    const r = await bad.request('/health', {}, env); const t = await r.text()
+    const r = await bad.request('/v1/auth/login', { method: 'POST', headers: H, body: JSON.stringify({ email: 'a@b.c', password: 'x' }) }, env); const t = await r.text()
     expect(r.status).toBe(503); expect(t).not.toContain('secret')
   })
 })
