@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { DuplicateKeyError, type Db } from '../../src/db/client'
 
 const translate = (mysql: string) => mysql.replace(/--.*$/gm, '').split(/;\s*(?:\n|$)/).map((s) => s.trim()).filter(Boolean).map((s) => s
-  .replace(/\b(?:VAR)?CHAR\(\d+\)/g, 'TEXT').replace(/DATETIME\(3\)/g, 'TEXT').replace(/\bINT\b/g, 'INTEGER')
+  .replace(/\b(?:VAR)?CHAR\(\d+\)/g, 'TEXT').replace(/DATETIME\(3\)/g, 'TEXT').replace(/\bJSON\b/g, 'TEXT').replace(/\bDATE\b/g, 'TEXT').replace(/\bINT\b/g, 'INTEGER')
   .replace(/^\s*UNIQUE KEY \w+ \(/gm, '  UNIQUE (').replace(/^\s*KEY \w+ \([^)]*\),?\n/gm, '').replace(/,\s*\)\s*$/, '\n)'))
 
 export function sqliteDb(): Db & { raw: DatabaseSync } {
