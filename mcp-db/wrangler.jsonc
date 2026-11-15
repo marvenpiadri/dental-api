@@ -1,0 +1,8 @@
+{
+  "name": "dontalist-db-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-14",
+  // Secrets (never here): wrangler secret put TIDB_DATABASE_URL  /  wrangler secret put MCP_TOKEN
+  // Writes are off unless you set ALLOW_WRITES to "true" (test databases only).
+  "vars": { "ALLOW_WRITES": "false" }
+}
