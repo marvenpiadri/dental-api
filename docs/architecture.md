@@ -387,3 +387,40 @@ Honest limits: I have run **none** of these against TiDB. In the earlier prototy
 5. The IndexedDB import touches clinical and financial history; its verification step is not optional.
 6. Two repositories mean the permission table, the chart payload and the error shapes can drift; contract tests are the only guard.
 7. A Neon password pasted earlier in this project (provider since dropped) is still exposed and must be rotated. For TiDB, keep credentials out of chat and use a least-privilege runtime user.
+
+---
+
+## 13. Review outcomes (supersedes earlier sections where they differ)
+
+Evidence levels: **Source** = read in `@tidbcloud/serverless` 0.3.0; **Docs** = vendor docs; **Local** = run in local workerd or the node:sqlite stand-in (NOT TiDB); **Unverified** = nothing run. No test has been run against TiDB: the sandbox cannot reach it.
+
+### 1. Confirmed and safe
+- No `nodejs_compat` needed (app builds and runs in workerd without it). *Local*
+- Server-side opaque sessions (SHA-256 of token stored), re-validated on every request; suspended staff and revoked/expired/idle sessions are rejected. *Local, 9 tests*
+- Exact-origin CORS from config, Origin + CSRF-header on every mutation, 64 KB streamed body cap. *Local*
+- Permissions are a verbatim copy of the frontend rules; a contract test fails on drift. *Local*
+- Money in BigInt minor units; DECIMAL arrives as a string from the driver, never a float. *Source + Local*
+- Pagination: default 25, max 100, invalid values rejected (not clamped), keyset cursor, `limit+1` instead of COUNT. *Local*
+
+### 2. Corrected during the review
+| Was | Now |
+|---|---|
+| PBKDF2 100,000 iterations | Below OWASP (600,000 for SHA-256). Now 6 chained rounds × 100,000 (= 600,000 cost), versioned `pbkdf2$100000x6$…`, pepper, rehash on login. Chained because a deployed Worker may cap one call at 100,000 (local workerd accepts 600,000 in ~80 ms). Argon2id via `hash-wasm` fails in workerd (runtime Wasm compile disallowed); needs a precompiled `.wasm` import. |
+| Cookie `Domain=dontalist.com` (Option A) | Default host-only `__Host-dl_session` on the API host. Name, domain, Secure, SameSite all configurable; unsafe combinations (`__Host-` with Domain, `None` without Secure) refuse to start. |
+| "Driver uses prepared statements" | **It does not.** `?` is interpolated client-side. SQL must contain no literal `?`; we assert placeholders == params (`checkPlaceholders`). Residual risk: depends on server not using `NO_BACKSLASH_ESCAPES` (T0 checks `@@sql_mode`). |
+| "Driver has timeouts" | It has none. We pass a custom `fetch` with `AbortSignal.timeout(8s)`. |
+| Lockout SQL `SET failed_logins=failed_logins+1, locked_until=CASE WHEN failed_logins+1…` | MySQL evaluates SET left to right, SQLite does not: the same text meant different things (off by one in MySQL). Assignment order now makes both agree. |
+| Slot claims: sweep deletes orphan claims | Race: it could delete claims of an appointment still being created. Design: insert appointment row first as `booking`, then claims, then flip live; sweep only deletes claims whose appointment is missing AND older than a lease. Reschedule claims only delta slots, version-checked UPDATE is the arbiter, then verify claim count, delete old-only slots by exact key. No `ON DUPLICATE KEY` trick. |
+| Invoice numbers "gap-free via MAX+1 + retry" | Cannot be guaranteed under failures; not claimed. Proposal: unique per clinic+kind+year, issued in the same step as the invoice; a failed issue may leave a gap, which is recorded, never reused. See decisions. |
+
+### 3. Requires a real TiDB integration test (T0–T15, `tests/tidb`, not yet written/run)
+Multi-row INSERT atomicity (slot claims); concurrent double-booking (T7–T10); behaviour of `begin()` under timeout/abort; CHECK/FK enforcement on the target version; composite FKs; `@@sql_mode`; DECIMAL/DATETIME/JSON round-trip; 10,000-row cap; unique-key error text for 1062 mapping; cascade behaviour; invoice-number concurrency (T11); Worker→TiDB latency, Smart Placement, 10/25/50-concurrency load and P50/P95/P99 on a deployed Worker; PBKDF2 600,000 single-call on a deployed Worker.
+
+### 4. Needs a decision from the owner
+1. **Plain-text passwords were requested and declined.** Hashing stays. Operator access is `npm run set-password -- <email>` (new random password, sessions revoked), so any clinic is always reachable without knowing anyone's password.
+2. Invoice numbering policy (gap-tolerant unique numbers vs. a stricter scheme). The frontend text says gap-free.
+3. How Angular SSR learns the session with a host-only API cookie (SSR does not see the API host's cookie). Options: SSR does no authenticated rendering (client-side data after login, recommended); or an SSR-host session cookie.
+4. Hosting region vs. Moroccan Law 09-08 / CNDP: legal confirmation needed; do not load real patient data into us-east-1 until confirmed. Dev/staging only meanwhile.
+5. Session lifetimes (default idle 2 h, absolute 12 h; configurable).
+6. The 5-minute grid: needs real frontend backups to check for off-grid historical appointments; the importer must report them, never move them.
+7. **Credential hygiene:** the previously exposed Neon password must be rotated; use least-privilege runtime vs. migration users.

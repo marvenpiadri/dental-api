@@ -36,3 +36,7 @@ Never commit `.dev.vars`, database URLs, passwords, API keys, tokens, or product
 ## Important
 
 Read [CLAUDE.md](./CLAUDE.md) before making changes. The API must use server-side pagination and must not load entire clinic datasets into memory. Do not implement production database features until the existing frontend contracts and current database design have been inspected.
+
+## Operator access
+
+Passwords are stored only as salted, peppered hashes. To get into any clinic account: `npm run set-password -- user@clinic.ma` prints a new temporary password and revokes that account's sessions. `npm run migrate -- --check` lists migrations; `npm run migrate` applies them (needs `.dev.vars`; never against production without approval). `npm test` runs the offline suite (SQLite stand-in, not TiDB).

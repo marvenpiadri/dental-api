@@ -1,3 +1,5 @@
-# Copy this file to .dev.vars and add your TiDB Cloud Serverless connection URL.
-# Never commit the real .dev.vars file.
-TIDB_DATABASE_URL="mysql://USERNAME:PASSWORD@HOST/DATABASE"
+TIDB_DATABASE_URL=mysql://USER:PASSWORD@gateway01.us-east-1.prod.aws.tidbcloud.com:4000/dontalist
+PASSWORD_PEPPER=change-me-long-random
+APP_ORIGIN=http://localhost:4200
+API_ORIGIN=http://localhost:8787
+COOKIE_SECURE=false

@@ -7,15 +7,19 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "vitest run",
+    "migrate": "node --env-file=.dev.vars tools/migrate.ts",
+    "set-password": "node --env-file=.dev.vars tools/set-password.ts"
   },
   "dependencies": {
     "@tidbcloud/serverless": "^0.3.0",
     "hono": "^4.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.2026.0",
+    "@cloudflare/workers-types": "^5.20261113.1",
     "typescript": "^5.8.0",
+    "vitest": "^3.2.7",
     "wrangler": "^4.0.0"
   }
 }

@@ -1,0 +1,54 @@
+import { Hono } from 'hono'
+import { deleteCookie, setCookie } from 'hono/cookie'
+import { hashPassword, needsRehash, verifyPassword, dummyHash } from './password'
+import { newId, randomToken, sha256Hex } from '../lib/ids'
+import { fromDb, toDb } from '../lib/time'
+import { ApiError, fail } from '../http/errors'
+import { authenticate } from '../http/middleware'
+import type { AppEnv } from '../http/context'
+import type { Role } from './permissions'
+
+const MAX_FAILURES = 5
+const LOCK_MS = 15 * 60_000
+type StaffRow = { id: string; clinic_id: string; password_hash: string; failed_logins: number; locked_until: string | null; suspended_at: string | null; role: Role; name: string }
+
+export const authRoutes = new Hono<AppEnv>()
+
+authRoutes.post('/login', async (c) => {
+  const bad = () => fail(c, new ApiError(401, 'invalid_credentials', 'E-mail or password is incorrect'))
+  let body: { email?: unknown; password?: unknown }
+  try { body = await c.req.json() } catch { return fail(c, new ApiError(400, 'bad_request', 'Invalid request')) }
+  if (typeof body.email !== 'string' || typeof body.password !== 'string' || body.email.length > 254 || body.password.length > 200)
+    return fail(c, new ApiError(400, 'bad_request', 'Invalid request'))
+  const db = c.get('db'), now = c.get('now'), cfg = c.get('config')
+  const email = body.email.trim().toLowerCase()
+  const [u] = await db.rows<StaffRow>('SELECT id, clinic_id, password_hash, failed_logins, locked_until, suspended_at, role, name FROM staff WHERE email_norm = ?', [email])
+  // Same work whether or not the account exists, so timing does not reveal accounts.
+  const ok = await verifyPassword(body.password, u?.password_hash ?? dummyHash(), c.env.PASSWORD_PEPPER)
+  if (u?.locked_until && fromDb(u.locked_until) > now) return fail(c, new ApiError(429, 'locked', 'Too many attempts. Try again later.'))
+  if (!u || !ok || u.suspended_at) {
+    // locked_until is assigned BEFORE failed_logins: MySQL evaluates SET left to right (SQLite uses old values), so this order means the same in both.
+    if (u) await db.run('UPDATE staff SET locked_until = CASE WHEN failed_logins + 1 >= ? THEN ? ELSE locked_until END, failed_logins = failed_logins + 1 WHERE id = ?', [MAX_FAILURES, toDb(now + LOCK_MS), u.id])
+    return bad()
+  }
+  if (u.failed_logins || u.locked_until) await db.run('UPDATE staff SET failed_logins = 0, locked_until = NULL WHERE id = ?', [u.id])
+  if (needsRehash(u.password_hash)) await db.run('UPDATE staff SET password_hash = ? WHERE id = ?', [await hashPassword(body.password, c.env.PASSWORD_PEPPER), u.id])
+  const token = randomToken()
+  await db.run('INSERT INTO auth_session (token_hash, clinic_id, staff_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [await sha256Hex(token), u.clinic_id, u.id, toDb(now), toDb(now), toDb(now + cfg.session.absoluteMs)])
+  await db.run('INSERT INTO audit_event (id, clinic_id, staff_id, action, created_at) VALUES (?, ?, ?, ?, ?)', [newId(), u.clinic_id, u.id, 'auth.login', toDb(now)])
+  setCookie(c, cfg.cookie.name, token, { httpOnly: true, secure: cfg.cookie.secure, sameSite: cfg.cookie.sameSite, path: '/', domain: cfg.cookie.domain, maxAge: Math.floor(cfg.session.absoluteMs / 1000) })
+  return c.json({ staff: { id: u.id, name: u.name, role: u.role } })
+})
+
+authRoutes.post('/logout', authenticate, async (c) => {
+  const cfg = c.get('config')
+  await c.get('db').run('UPDATE auth_session SET revoked_at = ? WHERE token_hash = ?', [toDb(c.get('now')), c.get('principal').sessionHash])
+  deleteCookie(c, cfg.cookie.name, { path: '/', domain: cfg.cookie.domain, secure: cfg.cookie.secure })
+  return c.body(null, 204)
+})
+
+authRoutes.get('/me', authenticate, (c) => {
+  const p = c.get('principal')
+  return c.json({ id: p.staffId, clinicId: p.clinicId, name: p.name, role: p.role, permissions: [...p.permissions].sort() })
+})

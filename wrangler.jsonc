@@ -3,5 +3,7 @@
   "name": "dontalist-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-14",
-  "workers_dev": true
+  "workers_dev": true,
+  // Per-environment, non-secret settings. Secrets (TIDB_DATABASE_URL, PASSWORD_PEPPER) are Worker secrets / .dev.vars, never here.
+  "vars": { "APP_ORIGIN": "https://dontalist.com", "API_ORIGIN": "https://api.dontalist.com" }
 }
