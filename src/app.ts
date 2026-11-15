@@ -5,13 +5,15 @@ import { patientRoutes } from './patients/routes'
 import { billingRoutes } from './billing/routes'
 import { teamRoutes } from './team/routes'
 import { clinicalRoutes } from './clinical/routes'
+import { documentRoutes } from './files/routes'
 import { resourceRoutes } from './team/resources'
 import { getDb } from './db/client'
+import { r2Store } from './files/store'
 import { ApiError, fail } from './http/errors'
 import { base, security } from './http/middleware'
 import type { AppEnv, Deps } from './http/context'
 
-export function createApp(deps: Deps = { db: (env) => getDb(env) }) {
+export function createApp(deps: Deps = { db: (env) => getDb(env), files: (env) => r2Store(env.FILES) }) {
   const app = new Hono<AppEnv>()
   app.use('*', base(deps), ...security)
   app.get('/health', (c) => c.json({ ok: true, service: 'dontalist-api' }))
@@ -21,6 +23,7 @@ export function createApp(deps: Deps = { db: (env) => getDb(env) }) {
   app.route('/v1/staff', teamRoutes)
   app.route('/v1', resourceRoutes)
   app.route('/v1', clinicalRoutes)
+  app.route('/v1', documentRoutes)
   app.route('/v1', billingRoutes)
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {

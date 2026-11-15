@@ -1,6 +1,8 @@
 /** Worker bindings. Secrets come from `.dev.vars` locally and `wrangler secret put` in deployed environments. */
 export type Bindings = {
   TIDB_DATABASE_URL: string
+  /** Private R2 bucket for patient files. Never public; every read goes through an authorized API route. */
+  FILES?: R2Bucket
   /** Defence-in-depth secret mixed into password hashes. Stored separately from the database. */
   PASSWORD_PEPPER: string
   // Per-environment settings (wrangler.jsonc `vars`). Nothing here is hardcoded in code.
