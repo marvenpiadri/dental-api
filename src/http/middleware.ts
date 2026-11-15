@@ -49,6 +49,7 @@ export const security = [
 type SessionRow = { token_hash: string; clinic_id: string; staff_id: string; last_seen_at: string; expires_at: string; name: string; role: Role; suspended_at: string | null }
 
 export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
+  if (c.get('principal')) return next() // already authenticated by an earlier mount of this middleware
   const { cookie, session } = c.get('config'), now = c.get('now'), db = c.get('db')
   const token = getCookie(c, cookie.name)
   if (!token || token.length > 128) return fail(c, new ApiError(401, 'unauthenticated', 'Sign in required'))

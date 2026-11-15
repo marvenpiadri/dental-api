@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS clinic (
   id          VARCHAR(64)  NOT NULL PRIMARY KEY,
   name        VARCHAR(200) NOT NULL,
   timezone    VARCHAR(64)  NOT NULL DEFAULT 'Africa/Casablanca',
+  currency    CHAR(3)      NOT NULL DEFAULT 'MAD',
   created_at  DATETIME(3)  NOT NULL
 );
 
