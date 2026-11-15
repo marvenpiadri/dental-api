@@ -3,3 +3,5 @@ PASSWORD_PEPPER=change-me-long-random
 APP_ORIGIN=http://localhost:4200
 API_ORIGIN=http://localhost:8787
 COOKIE_SECURE=false
+# Scratch database ONLY (never production): used by `npm run test:tidb`
+TIDB_TEST_URL=mysql://USER:PASSWORD@gateway01.us-east-1.prod.aws.tidbcloud.com:4000/dontalist_test

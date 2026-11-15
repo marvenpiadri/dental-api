@@ -10,7 +10,8 @@
     "cf-typegen": "wrangler types",
     "test": "vitest run",
     "migrate": "node --env-file=.dev.vars tools/migrate.ts",
-    "set-password": "node --env-file=.dev.vars tools/set-password.ts"
+    "set-password": "node --env-file=.dev.vars tools/set-password.ts",
+    "test:tidb": "node --env-file=.dev.vars node_modules/vitest/vitest.mjs run -c vitest.tidb.config.ts"
   },
   "dependencies": {
     "@tidbcloud/serverless": "^0.3.0",

@@ -424,3 +424,6 @@ Multi-row INSERT atomicity (slot claims); concurrent double-booking (T7–T10); 
 5. Session lifetimes (default idle 2 h, absolute 12 h; configurable).
 6. The 5-minute grid: needs real frontend backups to check for off-grid historical appointments; the importer must report them, never move them.
 7. **Credential hygiene:** the previously exposed Neon password must be rotated; use least-privilege runtime vs. migration users.
+
+### 13b. Scheduling pass (feat/scheduling)
+`db/migrations/0002_scheduling.sql` (patient core, chair, dentist_profile, appointment with `live` + `version`, appointment_slot, status history) and `src/appointments/slots.ts` implement the corrected slot design: create (row live=0 → claims → count check → live=1), move (delta claims → version-checked UPDATE → exact-key release), status change (release / re-claim), `sweepStale` (lease, never touches live appointments). Off-grid times are rejected, not moved. 13 logic tests pass on the SQLite stand-in only. `tests/tidb/slots.test.ts` (sql_mode, duplicate-key mapping, multi-row INSERT atomicity, 20-way concurrent booking, DECIMAL/DATETIME round-trip) is written but **has not been run**: set `TIDB_TEST_URL` (scratch DB) and run `npm run test:tidb`. Known gap: no reconcile job for claims left by a crash mid-move (over-blocks only); HTTP endpoints for appointments are the next pass.
