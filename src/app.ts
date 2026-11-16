@@ -6,6 +6,7 @@ import { billingRoutes } from './billing/routes'
 import { teamRoutes } from './team/routes'
 import { clinicalRoutes } from './clinical/routes'
 import { documentRoutes } from './files/routes'
+import { prescriptionRoutes } from './clinical/prescriptions'
 import { resourceRoutes } from './team/resources'
 import { getDb } from './db/client'
 import { r2Store } from './files/store'
@@ -24,6 +25,7 @@ export function createApp(deps: Deps = { db: (env) => getDb(env), files: (env) =
   app.route('/v1', resourceRoutes)
   app.route('/v1', clinicalRoutes)
   app.route('/v1', documentRoutes)
+  app.route('/v1', prescriptionRoutes)
   app.route('/v1', billingRoutes)
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {

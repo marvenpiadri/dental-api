@@ -450,3 +450,10 @@ Migration `0004_clinical.sql`. All under `/v1/patients/:id/…` or by id, each l
 - Order: insert row `live=0` → stream to R2 → verify count and magic bytes → `live=1`. Failure removes its own object and row. Orphans from a crash stay `live=0` and are invisible; a sweeper is not built yet.
 - Download is an attachment with `nosniff`, a sandbox CSP and `no-store`. Void hides the document but keeps record and bytes (retention). Permissions: `clinical.create|view|void`; clinic scoping on every query.
 - Verified: 5 offline tests against a fake store (types, mismatched bytes, length lies, oversize, isolation, permissions, void, keyset paging). Not verified: real R2 streaming behaviour and the large-file path.
+
+### 13i. Prescriptions
+
+- Tables (`0006`): `prescription`, `prescription_event` (append-only history), `rx_template`. Items are JSON on the row (not a lines table): a draft edit and the issued snapshot are each one atomic write. Template scope is `clinic` (needs `clinical.approve` to manage) or `dentist` (private to its owner); using one copies the items.
+- Issue (`clinical.approve`) is a conditional UPDATE `WHERE status='draft' AND version=?`, which is also the immutability guard; the number `RX-YYYY-NNNN` (clinic-local year) is claimed through the unique key with retry. Void needs a reason; a correction is a linked draft and supersedes the original only after it is issued.
+- Print: A4 HTML, EN/FR, every value escaped, CSP blocks scripts. No medical-context endpoint: the frontend reads `/patients/:id/medical` (version 0 = nothing recorded, which is not "no allergies").
+- Verified: 13 offline tests (SQLite stand-in). Not verified on TiDB; the number-allocation race is only tested for the double-issue case.
