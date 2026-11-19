@@ -192,7 +192,7 @@ I cannot run these here (section 0). Each is a script in `tests/tidb/`, run with
 | T1 | stateless autocommit write then read | durable and visible |
 | T2 | `begin → insert → commit` | row visible after commit only |
 | T3 | `begin → insert → rollback`; and throw before commit | row absent; no leaked lock |
-| T4 | two interleaved transactions updating the same row (optimistic/pessimistic behaviour) | one waits or fails with a retryable code (1213/1205/9007 write-conflict); never a lost update |
+| T4 | (written: tests/tidb/scheduling.test.ts, unrun) two interleaved transactions updating the same row (optimistic/pessimistic behaviour) | one waits or fails with a retryable code (1213/1205/9007 write-conflict); never a lost update |
 | T5 | 50 parallel `UPDATE counter = counter + 1` (stateless and in transactions) | final value 50 |
 | T6 | version-checked `UPDATE … WHERE id=? AND version=?` ×20 parallel | exactly one wins |
 | T7 | 20 parallel slot-claim INSERTs for one slot | exactly one succeeds, 19 get 1062 |
