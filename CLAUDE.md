@@ -14,24 +14,27 @@ The frontend is currently being completed separately. Do not merge the Angular a
 - TypeScript
 - Hono as the API framework
 - Cloudflare Workers as the runtime, developed/deployed with Wrangler
-- TiDB Cloud as the MySQL-compatible database
-- `@tidbcloud/serverless` as the database driver
+- Neon PostgreSQL as the database (decided 2026-11-20; TiDB/MySQL is abandoned, see `docs/postgres-architecture.md`)
+- `pg` (node-postgres) through Cloudflare Hyperdrive as the driver
 - Cloudflare R2 for private files/documents when that integration is implemented
 
 This is a Cloudflare Workers application, **not a conventional Node.js server**. Workers run on a V8/Web APIs runtime with a Node.js compatibility layer, not a complete Node.js environment.
 
-- Do not use Express, `mysql2`, TCP database connections, or Node-only packages.
-- Do not add `nodejs_compat` or other compatibility flags unless a required dependency demonstrably needs them.
+- Do not use Express, `mysql2`, an ORM, or Node-only packages other than `pg`.
+- `nodejs_compat` is enabled because `pg` needs it. Add no other compatibility flags without a demonstrated need.
 - Prefer Web Standard APIs and Cloudflare bindings.
 - Read secrets from Worker environment bindings; never hardcode or commit secrets.
 
-## Database driver
+## Database
 
-Use `@tidbcloud/serverless` to connect to TiDB Cloud. Prefer its stateless HTTP query interface for ordinary independent queries.
+Architecture, data model, connection strategy and roadmap: `docs/postgres-architecture.md` (`docs/architecture.md` is the superseded TiDB design).
 
-The driver's stateful connection and interactive transaction functionality is experimental. Do not assume it behaves like a mature persistent MySQL connection pool. Before relying on transactions for critical multi-step operations (for example, invoice/payment posting or appointment conflict handling), verify the current driver and TiDB documentation, identify the consistency guarantees, and add concurrency tests. Do not silently implement unsafe transaction workarounds.
-
-Keep SQL compatible with TiDB's MySQL dialect. Do not introduce PostgreSQL-specific syntax, types, extensions, RLS policies, or migration tooling.
+- Use `pg` via Hyperdrive (`env.HYPERDRIVE.connectionString`): one client per request, `ctx.waitUntil(client.end())`, short transactions, no session-level state (`SET` without `LOCAL`, session advisory locks, `LISTEN`). Neon's direct (non-pooled) string goes into Hyperdrive.
+- Use PostgreSQL natively: `uuid`, `timestamptz`, `numeric` for money, CHECK constraints, composite `(clinic_id, id)` foreign keys for tenant isolation, exclusion constraints, JSONB where the data is document-like. No ORM; parameterized SQL (`$1`) only.
+- Clinical charts (odontogram, periodontogram): never replace a whole chart from the client. Targeted per-tooth/section updates with `expectedRev`, an append-only revision log in the same transaction, server-side restore only.
+- Migrations: forward-only SQL in `db/migrations`, applied in a transaction each, checksummed in `schema_migration`.
+- Tests: label tiers. Unit tests need no database. Database behaviour is proven only by integration tests on real PostgreSQL. SQLite or mocks never count as PostgreSQL evidence.
+- Never commit connection strings. Runtime role is DML-only; migrations use a separate owner role.
 
 ## Data loading and pagination — mandatory
 

@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-11-20.** The database is now Neon PostgreSQL. See `postgres-architecture.md`. Kept as history only.
+
 # Dontalist backend — revised architecture (for review, nothing implemented)
 
 Status: **proposal awaiting approval.** No backend code, schema or migration has been written for this document.
