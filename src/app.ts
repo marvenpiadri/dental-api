@@ -1,6 +1,9 @@
 import { Hono } from 'hono'
 import { authRoutes } from './auth/routes'
 import { teamRoutes } from './team/routes'
+import { resourceRoutes } from './team/resources'
+import { patientRoutes } from './patients/routes'
+import { appointmentRoutes } from './appointments/routes'
 import { pgDb } from './db/client'
 import { r2Store } from './files/store'
 import { ApiError, fail } from './http/errors'
@@ -13,7 +16,10 @@ export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.conne
   app.get('/health', (c) => c.json({ ok: true, service: 'dontalist-api' }))
   app.route('/v1/auth', authRoutes)
   app.route('/v1/staff', teamRoutes)
-  // PostgreSQL port in progress (roadmap P2-P6): patients, appointments, billing, clinical, documents, prescriptions, resources are not mounted until ported and tested.
+  app.route('/v1/patients', patientRoutes)
+  app.route('/v1/appointments', appointmentRoutes)
+  app.route('/v1', resourceRoutes)
+  // PostgreSQL port in progress (roadmap P3-P6): billing, clinical, documents, prescriptions are not mounted until ported and tested (legacy-tidb/).
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {
     // Internal details stay in platform logs, never in the response.

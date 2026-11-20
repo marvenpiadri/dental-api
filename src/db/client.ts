@@ -11,6 +11,8 @@ export interface Db {
 }
 
 export class DuplicateKeyError extends Error { constructor() { super('duplicate key') } }
+/** An EXCLUDE constraint refused the row (e.g. two active appointments overlap for one dentist, chair or patient). */
+export class ExclusionError extends Error { constructor(readonly constraint: string) { super('exclusion violation') } }
 export class DbError extends Error {} // message is safe to log, never returned to clients
 
 // timestamptz -> ISO string (UTC); date -> 'YYYY-MM-DD'; numeric and int8 stay strings (never floats).
@@ -20,6 +22,7 @@ function mapError(e: unknown): never {
   if (!(e instanceof pg.DatabaseError)) throw e // our own errors (ApiError, DuplicateKeyError) pass through a transaction untouched
   const code = e.code
   if (code === '23505') throw new DuplicateKeyError()
+  if (code === '23P01') throw new ExclusionError(e.constraint ?? '')
   throw new DbError(`${code}: ${e.message.slice(0, 300)}`)
 }
 
