@@ -4,6 +4,7 @@ import { teamRoutes } from './team/routes'
 import { resourceRoutes } from './team/resources'
 import { patientRoutes } from './patients/routes'
 import { appointmentRoutes } from './appointments/routes'
+import { billingRoutes } from './billing/routes'
 import { pgDb } from './db/client'
 import { r2Store } from './files/store'
 import { ApiError, fail } from './http/errors'
@@ -19,7 +20,8 @@ export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.conne
   app.route('/v1/patients', patientRoutes)
   app.route('/v1/appointments', appointmentRoutes)
   app.route('/v1', resourceRoutes)
-  // PostgreSQL port in progress (roadmap P3-P6): billing, clinical, documents, prescriptions are not mounted until ported and tested (legacy-tidb/).
+  app.route('/v1', billingRoutes)
+  // PostgreSQL port in progress (roadmap P4-P6): clinical, documents, prescriptions are not mounted until ported and tested (legacy-tidb/).
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {
     // Internal details stay in platform logs, never in the response.

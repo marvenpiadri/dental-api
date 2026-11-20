@@ -106,7 +106,7 @@ SQLite is **removed**: no SQLite helper, no SQLite-based test counts as PostgreS
 | P0 | This document; CLAUDE.md and roadmaps switched to PostgreSQL; TiDB tasks cancelled | done |
 | P1 | `pg` client + `Db`/`tx` interface; migration runner; PostgreSQL test harness; baseline schema (clinic, staff, permissions, sessions, audit); auth and team routes ported; TiDB client, SQLite helper and tests removed (unported TiDB modules parked in `legacy-tidb/`, unmounted) | **done 2026-11-20**: 41 tests pass (5 files; 36 on real PostgreSQL 18.7, 5 unit). Not yet run against Neon/Hyperdrive |
 | P2 | Patients (file numbers, search with trigram index), dentists, chairs, appointments with exclusion constraints, status and reschedule history | **done 2026-11-20**: 65 tests pass (24 new on real PostgreSQL incl. 20-way booking race). Waiting list and duplicate detection are not in P2 |
-| P3 | Billing: invoices, payments, credit notes, refunds, counters, immutability triggers | |
+| P3 | Billing: invoices, payments, credit notes, refunds, counters, immutability triggers | **done 2026-11-20**: 12 tests on real PostgreSQL (race on numbering, double-cancel, refund cap) |
 | P4 | Clinical: medical history, chart tables with revision log and targeted patch API, exams, treatment plan | |
 | P5 | Documents on R2, prescriptions and templates | |
 | P6 | Remaining modules (clinic profile, services, insurance, practice, lab, letters, reports aggregates) | |
