@@ -1,6 +1,9 @@
 /** Worker bindings. Secrets come from `.dev.vars` locally and `wrangler secret put` in deployed environments. */
 export type Bindings = {
-  TIDB_DATABASE_URL: string
+  /** Production: Cloudflare Hyperdrive in front of Neon (direct string configured in Hyperdrive). */
+  HYPERDRIVE?: { connectionString: string }
+  /** Local `wrangler dev` / tests without Hyperdrive. Never committed. */
+  DATABASE_URL?: string
   /** Private R2 bucket for patient files. Never public; every read goes through an authorized API route. */
   FILES?: R2Bucket
   /** Defence-in-depth secret mixed into password hashes. Stored separately from the database. */

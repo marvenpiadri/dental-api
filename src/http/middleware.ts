@@ -8,7 +8,7 @@ import { effective, type Permission, type Role } from '../auth/permissions'
 import { sha256Hex } from '../lib/ids'
 import { fromDb, toDb } from '../lib/time'
 import { ApiError, fail } from './errors'
-import type { Db } from '../db/client'
+import type { Db, PgDb } from '../db/client'
 import { unconfiguredStore } from '../files/store'
 import type { AppEnv, Deps } from './context'
 
@@ -20,9 +20,10 @@ export const CSRF_HEADER = 'x-dontalist-csrf'
 export const base = (deps: Deps) => createMiddleware<AppEnv>(async (c, next) => {
   c.set('requestId', crypto.randomUUID())
   c.set('now', (deps.now ?? Date.now)())
+  let real: (Db & Partial<PgDb>) | undefined
   try { c.set('config', loadConfig(c.env)); // Lazy: /health and config errors must not need database credentials.
-    let real: Db | undefined; const get = () => (real ??= deps.db(c.env))
-    c.set('db', { rows: (q, p) => get().rows(q, p), run: (q, p) => get().run(q, p) })
+    const get = () => (real ??= deps.db(c.env))
+    c.set('db', { rows: (q, p) => get().rows(q, p), run: (q, p) => get().run(q, p), tx: (f) => get().tx(f) })
     c.set('files', deps.files ? deps.files(c.env) : unconfiguredStore) } catch (e) {
     console.error('configuration error', c.get('requestId'), e instanceof Error ? e.message : e)
     return fail(c, new ApiError(503, 'unavailable', 'Service unavailable'))
@@ -30,6 +31,8 @@ export const base = (deps: Deps) => createMiddleware<AppEnv>(async (c, next) => 
   c.header('X-Request-Id', c.get('requestId'))
   c.header('Cache-Control', 'no-store')
   await next()
+  // Release the connection after the response is sent.
+  try { if (real?.end) c.executionCtx.waitUntil(real.end()) } catch { /* no execution context (tests): the owner of the pool closes it */ }
 })
 
 export const security = [
@@ -62,14 +65,14 @@ export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
   const [s] = await db.rows<SessionRow>(
     `SELECT s.token_hash, s.clinic_id, s.staff_id, s.last_seen_at, s.expires_at, t.name, t.role, t.suspended_at
        FROM auth_session s JOIN staff t ON t.id = s.staff_id AND t.clinic_id = s.clinic_id
-      WHERE s.token_hash = ? AND s.revoked_at IS NULL`, [hash])
+      WHERE s.token_hash = $1 AND s.revoked_at IS NULL`, [hash])
   if (!s || s.suspended_at || fromDb(s.expires_at) <= now || fromDb(s.last_seen_at) + session.idleMs <= now)
     return fail(c, new ApiError(401, 'unauthenticated', 'Sign in required'))
   const overrides = await db.rows<{ permission: Permission; kind: string }>(
-    'SELECT permission, kind FROM staff_permission WHERE clinic_id = ? AND staff_id = ?', [s.clinic_id, s.staff_id])
+    'SELECT permission, kind FROM staff_permission WHERE clinic_id = $1 AND staff_id = $2', [s.clinic_id, s.staff_id])
   const perms = effective({ role: s.role, extra: overrides.filter((o) => o.kind === 'extra').map((o) => o.permission), removed: overrides.filter((o) => o.kind === 'removed').map((o) => o.permission) })
   // Slide the idle window at most once a minute to avoid a write on every request.
-  if (now - fromDb(s.last_seen_at) > 60_000) await db.run('UPDATE auth_session SET last_seen_at = ? WHERE token_hash = ?', [toDb(now), hash])
+  if (now - fromDb(s.last_seen_at) > 60_000) await db.run('UPDATE auth_session SET last_seen_at = $1 WHERE token_hash = $2', [toDb(now), hash])
   c.set('principal', { staffId: s.staff_id, clinicId: s.clinic_id, name: s.name, role: s.role, permissions: perms, sessionHash: hash })
   await next()
 })

@@ -6,7 +6,7 @@ Backend API for Dontalist, separate from the Angular frontend repository.
 
 - Hono + TypeScript
 - Cloudflare Workers (Wrangler)
-- TiDB Cloud using `@tidbcloud/serverless` (HTTP-based driver)
+- Neon PostgreSQL through Cloudflare Hyperdrive, `pg` driver (see `docs/postgres-architecture.md`)
 - Cloudflare R2 for private patient files and documents
 
 ## Local development
@@ -16,7 +16,7 @@ Requirements: Node.js LTS and npm.
 ```bash
 npm install
 cp .dev.vars.example .dev.vars
-# Add your TiDB Cloud connection URL to .dev.vars
+# .dev.vars: DATABASE_URL (a local PostgreSQL or a Neon dev branch), PASSWORD_PEPPER, DATABASE_URL_MIGRATE (owner role)
 npm run dev
 ```
 
@@ -39,4 +39,8 @@ Read [CLAUDE.md](./CLAUDE.md) before making changes. The API must use server-sid
 
 ## Operator access
 
-Passwords are stored only as salted, peppered hashes. To get into any clinic account: `npm run set-password -- user@clinic.ma` prints a new temporary password and revokes that account's sessions. `npm run migrate -- --check` lists migrations; `npm run migrate` applies them (needs `.dev.vars`; never against production without approval). `npm test` runs the offline suite (SQLite stand-in, not TiDB).
+Passwords are stored only as salted, peppered hashes. To get into any clinic account: `npm run set-password -- user@clinic.ma` prints a new temporary password and revokes that account's sessions. `npm run migrate` applies `db/migrations` (needs `DATABASE_URL_MIGRATE`; never against production without approval).
+
+## Tests
+
+`npm test` runs everything. `*.unit.test.ts` need no database; `*.pg.test.ts` run on a REAL PostgreSQL: a throwaway embedded PostgreSQL is started automatically (as user `pgtest` when run as root), or set `TEST_DATABASE_URL` to a local PostgreSQL / Neon scratch branch (role with CREATEDB; each test file creates and drops its own database). `npm run test:unit` runs the unit tests only.

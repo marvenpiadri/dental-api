@@ -4,8 +4,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-14",
   "workers_dev": true,
-  // Per-environment, non-secret settings. Secrets (TIDB_DATABASE_URL, PASSWORD_PEPPER) are Worker secrets / .dev.vars, never here.
+  // `pg` needs the Node compatibility layer (docs/postgres-architecture.md §3).
+  "compatibility_flags": ["nodejs_compat"],
+  // Per-environment, non-secret settings. Secrets (PASSWORD_PEPPER, and DATABASE_URL for local dev) are Worker secrets / .dev.vars, never here.
+  // Hyperdrive: create once with `npx wrangler hyperdrive create dontalist-db --connection-string=<Neon DIRECT string, runtime role>` and paste the id below. Not deployed until the owner approves.
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000", "localConnectionString": "postgres://postgres:postgres@127.0.0.1:5432/dontalist" }],
   // Private bucket for patient files (create it once: npx wrangler r2 bucket create dontalist-files). Never make it public.
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "dontalist-files" }],
-  "vars": { "APP_ORIGIN": "https://dontalist.com", "API_ORIGIN": "https://api.dontalist.com" }
+  "vars": { "APP_ORIGIN": "https://app.dontalist.com", "API_ORIGIN": "https://api.dontalist.com" }
 }

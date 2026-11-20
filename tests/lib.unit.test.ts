@@ -4,7 +4,6 @@ import { formatMoney, parseMoney, percentOf, sum, toWholeUnits } from '../src/li
 import { decodeCursor, encodeCursor, page, parseLimit } from '../src/lib/pagination'
 import { limitStream, PayloadTooLargeError } from '../src/lib/stream-limit'
 import { loadConfig } from '../src/config'
-import { checkPlaceholders } from '../src/db/client'
 import { can, effective, defaultsOf } from '../src/auth/permissions'
 
 describe('password', () => {
@@ -73,13 +72,6 @@ describe('config', () => {
     expect(() => loadConfig({ ...e, COOKIE_DOMAIN: 'dontalist.com', COOKIE_NAME: '__Host-x' })).toThrow()
     expect(() => loadConfig({ ...e, APP_ORIGIN: 'https://x.com/path' })).toThrow()
     expect(() => loadConfig({ ...e, COOKIE_SAMESITE: 'None', COOKIE_SECURE: 'false' })).toThrow()
-  })
-})
-describe('db guards', () => {
-  it('placeholder count must equal parameter count', () => {
-    expect(() => checkPlaceholders('SELECT 1 WHERE a = ?', [])).toThrow()
-    expect(() => checkPlaceholders("SELECT '?' WHERE a = ?", [1])).toThrow() // a literal ? would be interpolated by the driver
-    expect(() => checkPlaceholders('SELECT 1 WHERE a = ?', [1])).not.toThrow()
   })
 })
 describe('permissions', () => {
