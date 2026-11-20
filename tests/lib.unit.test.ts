@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { isUuid, newId } from '../src/lib/ids'
 import { hashPassword, verifyPassword, needsRehash } from '../src/auth/password'
 import { formatMoney, parseMoney, percentOf, sum, toWholeUnits } from '../src/lib/money'
 import { decodeCursor, encodeCursor, page, parseLimit } from '../src/lib/pagination'
@@ -80,5 +81,18 @@ describe('permissions', () => {
     expect(can({ role: 'reception', removed: ['appointments.create'] }, 'appointments.create')).toBe(false)
     expect(effective({ role: 'owner' }).size).toBe(defaultsOf('owner').length)
     expect(can({ role: 'accountant' }, 'clinical.view')).toBe(false)
+  })
+})
+describe('newId (UUIDv7)', () => {
+  it('is a valid v7 uuid, unique, and sorts by creation time even within one millisecond', () => {
+    const ids = Array.from({ length: 5000 }, () => newId())
+    for (const id of ids.slice(0, 50)) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(new Set(ids).size).toBe(5000)
+    expect([...ids].sort()).toEqual(ids)
+    expect(isUuid(ids[0])).toBe(true)
+  })
+  it('embeds the creation time', () => {
+    const t = Date.now(), id = newId()
+    expect(Math.abs(parseInt(id.replace(/-/g, '').slice(0, 12), 16) - t)).toBeLessThan(2000)
   })
 })

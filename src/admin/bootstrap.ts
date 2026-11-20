@@ -1,7 +1,7 @@
-import { DuplicateKeyError, type Db } from '../db/client'
-import { hashPassword } from '../auth/password'
-import { newId } from '../lib/ids'
-import { toDb } from '../lib/time'
+import { DuplicateKeyError, type Db } from '../db/client.ts'
+import { hashPassword } from '../auth/password.ts'
+import { newId } from '../lib/ids.ts'
+import { toDb } from '../lib/time.ts'
 
 /** Operator-only (CLI): creates a clinic and its first owner in one transaction. There is deliberately no public sign-up endpoint. */
 export async function createClinic(db: Db, pepper: string, a: { clinicName: string; ownerEmail: string; ownerName: string; password: string; timezone?: string }, now = Date.now()) {

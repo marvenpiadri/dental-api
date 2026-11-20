@@ -12,7 +12,7 @@ export interface Db {
 
 export class DuplicateKeyError extends Error { constructor() { super('duplicate key') } }
 /** An EXCLUDE constraint refused the row (e.g. two active appointments overlap for one dentist, chair or patient). */
-export class ExclusionError extends Error { constructor(readonly constraint: string) { super('exclusion violation') } }
+export class ExclusionError extends Error { constraint: string; constructor(constraint: string) { super('exclusion violation'); this.constraint = constraint } }
 export class DbError extends Error {} // message is safe to log, never returned to clients
 
 // timestamptz -> ISO string (UTC); date -> 'YYYY-MM-DD'; numeric and int8 stay strings (never floats).
