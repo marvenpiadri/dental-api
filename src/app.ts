@@ -8,6 +8,8 @@ import { billingRoutes } from './billing/routes'
 import { clinicalRoutes } from './clinical/routes'
 import { documentRoutes } from './documents/routes'
 import { prescriptionRoutes } from './prescriptions/routes'
+import { settingsRoutes } from './settings/routes'
+import { recordRoutes } from './records/routes'
 import { pgDb } from './db/client'
 import { r2Store } from './files/store'
 import { ApiError, fail } from './http/errors'
@@ -27,6 +29,8 @@ export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.conne
   app.route('/v1', clinicalRoutes)
   app.route('/v1', documentRoutes)
   app.route('/v1', prescriptionRoutes)
+  app.route('/v1', settingsRoutes)
+  app.route('/v1', recordRoutes)
   // PostgreSQL port in progress (roadmap P5-P6): documents, prescriptions are not mounted until ported and tested (legacy-tidb/).
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {
