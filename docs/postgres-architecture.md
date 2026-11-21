@@ -109,7 +109,7 @@ SQLite is **removed**: no SQLite helper, no SQLite-based test counts as PostgreS
 | P3 | Billing: invoices, payments, credit notes, refunds, counters, immutability triggers | **done 2026-11-20**: 12 tests on real PostgreSQL (race on numbering, double-cancel, refund cap) |
 | P4 | Clinical: medical history, chart tables with revision log and targeted patch API, exams, treatment plan | done (16 PostgreSQL tests) |
 | P5 | Documents on R2, prescriptions and templates | done (13 PostgreSQL tests; R2 itself only via an in-memory fake, needs a real-bucket check) |
-| P6 | Remaining modules (clinic profile, services, insurance, practice, lab, letters, reports aggregates) | |
+| P6 | Remaining modules: clinic settings/profile/closures/price list, letters, insurance, waiting list, messages, practice (expenses, stock ledger, lab, tasks, implants, sterilization, equipment), visit notes, quotes, medication/allergy lists, reports (summary, receivables, overdue), duplicate detection and patient merge | **done 2026-11-21** (34 more PostgreSQL tests). Merge refuses a file that holds immutable clinical or billing records (it names them) instead of rewriting history. |
 | P7 | Backup/restore verification, Neon branch run, Hyperdrive deploy, load test of the hot paths | |
 
 The frontend plan (S1-S8 in the frontend repo's `docs/product-audit.md` §3c) continues in parallel and depends on P2 onward.
