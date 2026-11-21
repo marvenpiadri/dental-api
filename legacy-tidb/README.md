@@ -1,1 +1,0 @@
-TiDB-era route modules awaiting their PostgreSQL port (roadmap P2-P6). NOT compiled, NOT mounted, NOT tested. Their business rules are the reference for the port; their SQL (`?` placeholders, MAX+1 numbering, slot-claim tables, `live` flags) is not to be copied. Delete each file when its port lands.

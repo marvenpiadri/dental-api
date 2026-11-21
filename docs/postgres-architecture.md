@@ -108,7 +108,7 @@ SQLite is **removed**: no SQLite helper, no SQLite-based test counts as PostgreS
 | P2 | Patients (file numbers, search with trigram index), dentists, chairs, appointments with exclusion constraints, status and reschedule history | **done 2026-11-20**: 65 tests pass (24 new on real PostgreSQL incl. 20-way booking race). Waiting list and duplicate detection are not in P2 |
 | P3 | Billing: invoices, payments, credit notes, refunds, counters, immutability triggers | **done 2026-11-20**: 12 tests on real PostgreSQL (race on numbering, double-cancel, refund cap) |
 | P4 | Clinical: medical history, chart tables with revision log and targeted patch API, exams, treatment plan | done (16 PostgreSQL tests) |
-| P5 | Documents on R2, prescriptions and templates | |
+| P5 | Documents on R2, prescriptions and templates | done (13 PostgreSQL tests; R2 itself only via an in-memory fake, needs a real-bucket check) |
 | P6 | Remaining modules (clinic profile, services, insurance, practice, lab, letters, reports aggregates) | |
 | P7 | Backup/restore verification, Neon branch run, Hyperdrive deploy, load test of the hot paths | |
 
