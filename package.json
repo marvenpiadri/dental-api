@@ -12,7 +12,8 @@
     "migrate": "node --env-file=.dev.vars tools/migrate.ts",
     "set-password": "node --env-file=.dev.vars tools/set-password.ts",
     "test:unit": "vitest run tests/*.unit.test.ts",
-    "create-clinic": "node --env-file=.dev.vars tools/create-clinic.ts"
+    "create-clinic": "node --env-file=.dev.vars tools/create-clinic.ts",
+    "verify-backup": "node tools/verify-backup.ts"
   },
   "dependencies": {
     "hono": "^4.0.0",

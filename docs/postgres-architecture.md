@@ -110,7 +110,7 @@ SQLite is **removed**: no SQLite helper, no SQLite-based test counts as PostgreS
 | P4 | Clinical: medical history, chart tables with revision log and targeted patch API, exams, treatment plan | done (16 PostgreSQL tests) |
 | P5 | Documents on R2, prescriptions and templates | done (13 PostgreSQL tests; R2 itself only via an in-memory fake, needs a real-bucket check) |
 | P6 | Remaining modules: clinic settings/profile/closures/price list, letters, insurance, waiting list, messages, practice (expenses, stock ledger, lab, tasks, implants, sterilization, equipment), visit notes, quotes, medication/allergy lists, reports (summary, receivables, overdue), duplicate detection and patient merge | **done 2026-11-21** (34 more PostgreSQL tests). Merge refuses a file that holds immutable clinical or billing records (it names them) instead of rewriting history. |
-| P7 | Backup/restore verification, Neon branch run, Hyperdrive deploy, load test of the hot paths | |
+| P7 | Backup/restore verification, Neon branch run, Hyperdrive deploy, load test of the hot paths | Partly done: backup/restore verified and hot paths measured locally (below). Neon branch run, real backup drill and Hyperdrive deploy are NOT done; they need the owner and explicit approval. |
 
 The frontend plan (S1-S8 in the frontend repo's `docs/product-audit.md` §3c) continues in parallel and depends on P2 onward.
 
@@ -118,3 +118,20 @@ The frontend plan (S1-S8 in the frontend repo's `docs/product-audit.md` §3c) co
 1. Neon region (Europe recommended) and the data-protection position for patient data hosted outside Morocco (Law 09-08/CNDP).
 2. Hyperdrive requires a Cloudflare account setup; confirm it is available on the account used for production.
 3. Backup retention: Neon's restore window depends on the plan; choose a plan whose window matches the clinic's recovery needs, and decide where daily dumps are stored.
+
+
+## P7 evidence (local PostgreSQL 16.15, not Neon)
+
+Backup/restore: `npm run verify-backup -- <source-url> <admin-url>` dumps (custom format), restores into a scratch database and compares per-table fingerprints; `tests/backup.pg.test.ts` runs it (skipped when `pg_dump` is older than the server). Proven on PG 16 only. A real drill on Neon is still to do.
+
+Load test: one clinic, 20,000 patients, 120,000 appointments, `ANALYZE`d, `EXPLAIN (ANALYZE, BUFFERS)` of the exact route SQL. Single connection, warm cache, so these show index use and bounded work, not concurrency.
+
+| Query | Plan | Execution |
+|---|---|---|
+| Patient list, first page / deep keyset page | `ix_patient_order` index scan | 0.1 ms |
+| Patient search, common term | `ix_patient_order` + filter | 0.04 ms |
+| Patient search, rare term / no match | `ix_patient_order` + filter, scans the clinic's rows | 11-13 ms |
+| Calendar day (80 rows), week (101 rows, capped) | `ix_appt_clinic_start` | 0.1 ms |
+| Patient appointment history, page of 26 | `ix_appt_patient_start` bitmap + sort | 1.5 ms |
+
+Known limit: search with `LIKE '%x%'` across name, phone and number cannot use the trigram indexes because of the OR plus the keyset ORDER BY, so a rare or empty search costs time linear in the clinic's patient count (about 11 ms at 20k). Fine for one clinic; if a clinic reaches several hundred thousand patients, split search into per-column trigram queries. Not measured: concurrent load, Neon latency, Hyperdrive.

@@ -21,7 +21,7 @@ const env = { PASSWORD_PEPPER: 'pepper', APP_ORIGIN: 'https://app.test', API_ORI
 const H = { origin: 'https://app.test', 'x-dontalist-csrf': '1', 'content-type': 'application/json' }
 
 export async function harness() {
-  const { db, drop } = await testDb(20)
+  const { db, drop, url } = await testDb(20)
   const files = fakeStore(), app = createApp({ db: () => db, now: () => NOW, files: () => files.store })
   const A = await createClinic(db, 'pepper', { clinicName: 'A', ownerEmail: 'owner@a.test', ownerName: 'OwnerA', password: PW }, NOW)
   const B = await createClinic(db, 'pepper', { clinicName: 'B', ownerEmail: 'owner@b.test', ownerName: 'OwnerB', password: PW }, NOW)
@@ -35,5 +35,5 @@ export async function harness() {
   const call = (who: string, method: string, path: string, body?: unknown) => app.request(path, { method, headers: { ...H, cookie: cookies[who] }, body: body === undefined ? undefined : JSON.stringify(body) }, env)
   const raw = (who: string, method: string, path: string, body: BodyInit | undefined, headers: Record<string, string> = {}) => app.request(path, { method, headers: { origin: H.origin, 'x-dontalist-csrf': '1', cookie: cookies[who], ...headers }, body }, env)
   const json = async (r: Response) => (await r.json()) as any
-  return { db, drop, app, A, B, call, raw, json, files }
+  return { db, url, drop, app, A, B, call, raw, json, files }
 }
