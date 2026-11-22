@@ -1,7 +1,15 @@
-TIDB_DATABASE_URL=mysql://USER:PASSWORD@gateway01.us-east-1.prod.aws.tidbcloud.com:4000/dontalist
+# Copy to .dev.vars (git-ignored). Never commit real values.
+DATABASE_URL=postgres://USER:PASSWORD@HOST/dontalist
 PASSWORD_PEPPER=change-me-long-random
 APP_ORIGIN=http://localhost:4200
 API_ORIGIN=http://localhost:8787
 COOKIE_SECURE=false
-# Scratch database ONLY (never production): used by `npm run test:tidb`
-TIDB_TEST_URL=mysql://USER:PASSWORD@gateway01.us-east-1.prod.aws.tidbcloud.com:4000/dontalist_test
+# Cloudflare R2 (private bucket, S3 API). Create an API token with Object Read & Write on this bucket only.
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+R2_BUCKET=dontalist
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+
+# Password service (docs/password-service.md)
+PASSWORD_SERVICE_URL=
+PASSWORD_SERVICE_SECRET=

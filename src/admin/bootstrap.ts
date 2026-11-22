@@ -1,14 +1,14 @@
 import { DuplicateKeyError, type Db } from '../db/client.ts'
-import { hashPassword } from '../auth/password.ts'
+import type { PasswordService } from '../auth/password-service.ts'
 import { newId } from '../lib/ids.ts'
 import { toDb } from '../lib/time.ts'
 
 /** Operator-only (CLI): creates a clinic and its first owner in one transaction. There is deliberately no public sign-up endpoint. */
-export async function createClinic(db: Db, pepper: string, a: { clinicName: string; ownerEmail: string; ownerName: string; password: string; timezone?: string }, now = Date.now()) {
+export async function createClinic(db: Db, passwords: PasswordService, a: { clinicName: string; ownerEmail: string; ownerName: string; password: string; timezone?: string }, now = Date.now()) {
   const email = a.ownerEmail.trim().toLowerCase()
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 254) throw new Error('invalid email')
   if (!a.clinicName.trim() || a.clinicName.length > 200 || !a.ownerName.trim() || a.ownerName.length > 200) throw new Error('invalid name')
-  const clinicId = newId(), staffId = newId(), t = toDb(now), hash = await hashPassword(a.password, pepper)
+  const clinicId = newId(), staffId = newId(), t = toDb(now), hash = await passwords.hash(a.password)
   try {
     await db.tx(async (q) => {
       await q.run('INSERT INTO clinic (id, name, timezone, created_at) VALUES ($1, $2, $3, $4)', [clinicId, a.clinicName.trim(), a.timezone ?? 'Africa/Casablanca', t])

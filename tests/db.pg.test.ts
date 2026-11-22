@@ -8,12 +8,13 @@ import { migrate } from '../tools/migrate-lib'
 import { DuplicateKeyError, type PgDb } from '../src/db/client'
 import { createClinic } from '../src/admin/bootstrap'
 import { testDb } from './pg/db'
+import { testPasswords } from './pg/harness'
 
 let db: PgDb, url: string, drop: () => Promise<void>
 beforeAll(async () => { ({ db, url, drop } = await testDb()) })
 afterAll(async () => { await drop() })
 const N = Date.parse('2026-11-20T10:00:00Z')
-const mk = (name: string) => createClinic(db, 'pepper', { clinicName: name, ownerEmail: `${name}@x.test`, ownerName: name, password: 'correct horse battery' }, N)
+const mk = (name: string) => createClinic(db, testPasswords(), { clinicName: name, ownerEmail: `${name}@x.test`, ownerName: name, password: 'correct horse battery' }, N)
 
 describe('migrations', () => {
   it('are idempotent and record checksums; a changed applied file is refused', async () => {

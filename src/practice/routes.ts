@@ -67,8 +67,8 @@ practiceRoutes.post('/practice/expenses/:id/void', requires('practice.edit'), as
 })
 
 // ---------------- stock: quantity changes only through the ledger ----------------
-const stockView = (x: Record<string, unknown>) => ({ id: x.id, name: x.name, qty: x.qty, min: x.min_qty, unit: one(x.unit), expires: one(x.expires), supplier: one(x.supplier) })
-const STOCK = 'id, name, qty, min_qty, unit, expires::text AS expires, supplier'
+const stockView = (x: Record<string, unknown>) => ({ id: x.id, name: x.name, qty: x.qty, min: x.min_qty, unit: one(x.unit), expires: one(x.expires), supplier: one(x.supplier), photoFileId: x.photo_file_id ?? null })
+const STOCK = 'id, name, qty, min_qty, unit, expires::text AS expires, supplier, photo_file_id'
 practiceRoutes.get('/practice/stock', requires('practice.view'), async (c) => {
   const q = c.req.query(), where: string[] = ['archived_at IS NULL'], args: unknown[] = []
   if (q.low === 'true') where.push('qty <= min_qty')

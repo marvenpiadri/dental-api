@@ -31,11 +31,11 @@ const KINDS: Record<string, Kind> = {
       if (!partial || b.color !== undefined) o.color = color(b.color)
       if (!partial || b.hours !== undefined) o.hours = hours(b.hours)
       return o },
-    out: (r) => ({ id: r.id, name: r.name, specialty: r.specialty ?? null, color: r.color ?? null, phone: r.phone ?? null, email: r.email ?? null, registration: r.registration ?? null, hours: r.hours ?? null }) },
+    out: (r) => ({ id: r.id, name: r.name, photoFileId: r.photo_file_id ?? null, specialty: r.specialty ?? null, color: r.color ?? null, phone: r.phone ?? null, email: r.email ?? null, registration: r.registration ?? null, hours: r.hours ?? null }) },
 }
 for (const [path, k] of Object.entries(KINDS)) {
   resourceRoutes.get(`/${path}`, requires('appointments.view'), async (c) => {
-    const rows = await c.get('db').rows(`SELECT id, ${k.cols.join(', ')} FROM ${k.table} WHERE clinic_id = $1 AND archived_at IS NULL ORDER BY name, id LIMIT 200`, [c.get('principal').clinicId])
+    const rows = await c.get('db').rows(`SELECT id, ${k.cols.join(', ')}${k.table === 'dentist_profile' ? ', photo_file_id' : ''} FROM ${k.table} WHERE clinic_id = $1 AND archived_at IS NULL ORDER BY name, id LIMIT 200`, [c.get('principal').clinicId])
     return c.json({ items: rows.map(k.out) })
   })
   resourceRoutes.post(`/${path}`, requires('settings.edit'), async (c) => {

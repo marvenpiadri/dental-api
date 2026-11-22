@@ -42,7 +42,7 @@ mergeRoutes.get('/:id/duplicates', requires('patients.view'), async (c) => {
 // Records that cannot move: they are immutable by design (clinical history, money, issued documents).
 const BLOCKERS: [string, string][] = [
   ['invoices', 'SELECT 1 FROM invoice WHERE patient_id = $1 LIMIT 1'], ['payments', 'SELECT 1 FROM payment WHERE patient_id = $1 LIMIT 1'], ['chart', 'SELECT 1 FROM chart_head WHERE patient_id = $1 LIMIT 1'],
-  ['exams', 'SELECT 1 FROM exam WHERE patient_id = $1 LIMIT 1'], ['prescriptions', 'SELECT 1 FROM prescription WHERE patient_id = $1 LIMIT 1'], ['documents', 'SELECT 1 FROM document WHERE patient_id = $1 AND live LIMIT 1'],
+  ['exams', 'SELECT 1 FROM exam WHERE patient_id = $1 LIMIT 1'], ['prescriptions', 'SELECT 1 FROM prescription WHERE patient_id = $1 LIMIT 1'], ['files', "SELECT 1 FROM file WHERE patient_id = $1 AND status = 'ready' LIMIT 1"],
   ['letters', 'SELECT 1 FROM letter WHERE patient_id = $1 LIMIT 1'], ['visits', 'SELECT 1 FROM visit_note WHERE patient_id = $1 LIMIT 1'], ['quotes', 'SELECT 1 FROM plan_proposal WHERE patient_id = $1 LIMIT 1'],
   ['allergies', 'SELECT 1 FROM patient_allergy WHERE patient_id = $1 LIMIT 1'], ['medications', 'SELECT 1 FROM patient_medication WHERE patient_id = $1 LIMIT 1'], ['implants', 'SELECT 1 FROM implant_record WHERE patient_id = $1 LIMIT 1'],
   ['labOrders', 'SELECT 1 FROM lab_order WHERE patient_id = $1 LIMIT 1'], ['completedTreatments', "SELECT 1 FROM treatment_item WHERE patient_id = $1 AND status = 'done' LIMIT 1"],

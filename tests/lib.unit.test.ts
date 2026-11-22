@@ -1,23 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { isUuid, newId } from '../src/lib/ids'
-import { hashPassword, verifyPassword, needsRehash } from '../src/auth/password'
+import { verifyStored, isLegacyHash, DUMMY_HASH } from '../src/auth/password'
+import type { PasswordService } from '../src/auth/password-service'
 import { formatMoney, parseMoney, percentOf, sum, toWholeUnits } from '../src/lib/money'
 import { decodeCursor, encodeCursor, page, parseLimit } from '../src/lib/pagination'
 import { limitStream, PayloadTooLargeError } from '../src/lib/stream-limit'
 import { loadConfig } from '../src/config'
 import { can, effective, defaultsOf } from '../src/auth/permissions'
 
-describe('password', () => {
-  it('verifies, rejects wrong, and flags weaker stored costs for rehash', async () => {
-    const h = await hashPassword('correct horse battery', 'pep', { iterations: 1000, rounds: 2 })
-    expect(await verifyPassword('correct horse battery', h, 'pep')).toBe(true)
-    expect(await verifyPassword('correct horse batterz', h, 'pep')).toBe(false)
-    expect(await verifyPassword('correct horse battery', h, 'other-pepper')).toBe(false)
-    expect(needsRehash(h)).toBe(true)
-    expect(needsRehash(await hashPassword('x', 'pep', { iterations: 100_000, rounds: 6 }))).toBe(false)
+// A hash made by the pre-service implementation (PBKDF2 over HMAC(pepper, password), 1000x2 so the test is fast). Password "correct horse battery", pepper "pepper".
+const LEGACY = 'pbkdf2$1000x2$dIpvPhGsxX28kUECQRjO2A$jLx_8DG2DyF38xGgik33ihW6qMIG_fMEQBLsHrzouKc'
+const noService: PasswordService = { hash: async () => { throw new Error('must not be called') }, verify: async () => { throw new Error('must not be called') } }
+describe('legacy password verification', () => {
+  it('still verifies old PBKDF2 hashes without the service, and asks for an upgrade', async () => {
+    expect(isLegacyHash(LEGACY)).toBe(true); expect(isLegacyHash(DUMMY_HASH)).toBe(false)
+    expect(await verifyStored(noService, 'correct horse battery', LEGACY, 'pepper')).toEqual({ ok: true, upgrade: true })
+    expect(await verifyStored(noService, 'correct horse batterz', LEGACY, 'pepper')).toEqual({ ok: false, upgrade: true })
+    expect((await verifyStored(noService, 'correct horse battery', LEGACY, 'other-pepper')).ok).toBe(false)
+    expect((await verifyStored(noService, 'correct horse battery', LEGACY, undefined)).ok).toBe(false) // no pepper configured: cannot verify, never "true"
   })
-  it('rejects malformed or absurd stored hashes', async () => {
-    for (const s of ['', 'plain', 'pbkdf2$1x1$a', 'pbkdf2$99999999x1$AA$AA']) expect(await verifyPassword('x', s, 'p')).toBe(false)
+  it('rejects malformed or absurd legacy hashes', async () => {
+    for (const s of ['pbkdf2$1x1$a', 'pbkdf2$99999999x1$AA$AA', 'pbkdf2$1000x99$AA$AA', 'pbkdf2$', 'pbkdf2$abc$AA$AA']) expect((await verifyStored(noService, 'x', s, 'p')).ok, s).toBe(false)
+  })
+  it('sends everything else to the service', async () => {
+    const seen: string[][] = []
+    const svc: PasswordService = { hash: async () => '', verify: async (p, h) => { seen.push([p, h]); return true } }
+    expect(await verifyStored(svc, 'pw', '$argon2id$x')).toEqual({ ok: true, upgrade: false }); expect(seen).toEqual([['pw', '$argon2id$x']])
   })
 })
 describe('money (no floats)', () => {

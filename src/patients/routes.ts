@@ -31,10 +31,10 @@ const oneOf = (v: unknown, allowed: readonly string[], name: string): string | n
   if (v === undefined || v === null || v === '') return null
   if (typeof v !== 'string' || !allowed.includes(v)) throw bad(`${name} must be one of ${allowed.join(', ')}`); return v
 }
-const FIELDS = 'id, number, full_name, phone, email, birth_date, sex, country, city, address, emergency_name, emergency_phone, language, referral, alert, notes, whatsapp_consent, whatsapp_consent_at, created_at, archived_at'
+const FIELDS = 'id, number, full_name, phone, email, birth_date, sex, country, city, address, emergency_name, emergency_phone, language, referral, alert, notes, whatsapp_consent, whatsapp_consent_at, created_at, archived_at, photo_file_id'
 const view = (r: Record<string, unknown>) => ({ id: r.id, number: r.number, fullName: r.full_name, phone: r.phone, email: r.email, birthDate: r.birth_date, sex: r.sex, country: r.country, city: r.city,
   address: r.address, emergencyName: r.emergency_name, emergencyPhone: r.emergency_phone, language: r.language, referral: r.referral, alert: r.alert, notes: r.notes,
-  whatsappConsent: r.whatsapp_consent, whatsappConsentAt: r.whatsapp_consent_at, createdAt: r.created_at, archivedAt: r.archived_at })
+  whatsappConsent: r.whatsapp_consent, whatsappConsentAt: r.whatsapp_consent_at, createdAt: r.created_at, archivedAt: r.archived_at, photoFileId: r.photo_file_id ?? null })
 
 const TEXT: [string, string, number][] = [['phone', 'phone', 40], ['email', 'email', 254], ['country', 'country', 64], ['city', 'city', 100], ['address', 'address', 300],
   ['emergencyName', 'emergency_name', 200], ['emergencyPhone', 'emergency_phone', 40], ['referral', 'referral', 200], ['alert', 'alert', 500], ['notes', 'notes', 2000]]

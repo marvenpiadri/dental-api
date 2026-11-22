@@ -13,9 +13,11 @@
     "set-password": "node --env-file=.dev.vars tools/set-password.ts",
     "test:unit": "vitest run tests/*.unit.test.ts",
     "create-clinic": "node --env-file=.dev.vars tools/create-clinic.ts",
-    "verify-backup": "node tools/verify-backup.ts"
+    "verify-backup": "node tools/verify-backup.ts",
+    "r2-smoke": "node --env-file=.dev.vars tools/r2-smoke.ts"
   },
   "dependencies": {
+    "aws4fetch": "^1.0.20",
     "hono": "^4.0.0",
     "pg": "^8.23.1"
   },
@@ -23,6 +25,7 @@
     "@cloudflare/workers-types": "^5.20261113.1",
     "@types/pg": "^8.23.1",
     "embedded-postgres": "^18.7.0-beta.19",
+    "hash-wasm": "4.13.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.7",
     "wrangler": "^4.0.0"

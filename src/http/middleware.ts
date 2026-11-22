@@ -10,9 +10,9 @@ import { fromDb, toDb } from '../lib/time'
 import { ApiError, fail } from './errors'
 import type { Db, PgDb } from '../db/client'
 import { unconfiguredStore } from '../files/store'
+import { unconfiguredPasswords } from '../auth/password-service'
 import type { AppEnv, Deps } from './context'
 
-export const UPLOAD_PATH = /^\/v1\/patients\/[^/]+\/documents$/
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 /** Sent by our own frontend on every mutation; browsers will not add it to a cross-site form post. */
 export const CSRF_HEADER = 'x-dontalist-csrf'
@@ -24,7 +24,8 @@ export const base = (deps: Deps) => createMiddleware<AppEnv>(async (c, next) => 
   try { c.set('config', loadConfig(c.env)); // Lazy: /health and config errors must not need database credentials.
     const get = () => (real ??= deps.db(c.env))
     c.set('db', { rows: (q, p) => get().rows(q, p), run: (q, p) => get().run(q, p), tx: (f) => get().tx(f) })
-    c.set('files', deps.files ? deps.files(c.env) : unconfiguredStore) } catch (e) {
+    c.set('files', deps.files ? deps.files(c.env) : unconfiguredStore)
+    c.set('passwords', deps.passwords ? deps.passwords(c.env) : unconfiguredPasswords) } catch (e) {
     console.error('configuration error', c.get('requestId'), e instanceof Error ? e.message : e)
     return fail(c, new ApiError(503, 'unavailable', 'Service unavailable'))
   }
@@ -48,10 +49,8 @@ export const security = [
     }
     await next()
   }),
-  // Streams are counted, so a lying Content-Length cannot bypass this. Per-route larger limits (file upload) are set on those routes.
-  // The one route that carries file bytes sets its own, larger, streamed limit; every other body is capped at 64 KB.
-  createMiddleware<AppEnv>((c, next) => c.req.method === 'POST' && UPLOAD_PATH.test(c.req.path) ? next()
-    : bodyLimit({ maxSize: 64 * 1024, onError: (cc) => fail(cc, new ApiError(413, 'too_large', 'Request too large')) })(c, next)),
+  // Streams are counted, so a lying Content-Length cannot bypass this. File bytes never reach the API (browsers PUT them to R2), so every body is capped at 64 KB.
+  bodyLimit({ maxSize: 64 * 1024, onError: (cc) => fail(cc, new ApiError(413, 'too_large', 'Request too large')) }),
 ]
 
 type SessionRow = { token_hash: string; clinic_id: string; staff_id: string; last_seen_at: string; expires_at: string; name: string; role: Role; suspended_at: string | null }

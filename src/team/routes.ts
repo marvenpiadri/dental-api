@@ -4,7 +4,6 @@ import { authenticate, requires } from '../http/middleware'
 import type { AppEnv } from '../http/context'
 import { DuplicateKeyError, type Db } from '../db/client'
 import { ACTIONS, AREAS, ROLES, OWNER_ONLY, canManageRole, type Permission, type Role } from '../auth/permissions'
-import { hashPassword } from '../auth/password'
 import { validPassword } from '../auth/password'
 import { isUuid, newId } from '../lib/ids'
 import { toDb } from '../lib/time'
@@ -21,9 +20,9 @@ const role = (v: unknown): Role => { if (typeof v !== 'string' || !ROLES.include
 const ALL = new Set(AREAS.flatMap((a) => ACTIONS.map((x) => `${a}.${x}`)))
 const perms = (v: unknown): Permission[] => { if (!Array.isArray(v) || v.length > 100 || v.some((p) => typeof p !== 'string' || !ALL.has(p))) throw bad('Invalid permissions'); return [...new Set(v as Permission[])] }
 
-type S = { id: string; name: string; email_norm: string; role: Role; job_title: string | null; suspended_at: string | null; suspended_reason: string | null }
-const COLS = 'id, name, email_norm, role, job_title, suspended_at, suspended_reason'
-const view = (s: S, o: { permission: string; kind: string }[]) => ({ id: s.id, name: s.name, email: s.email_norm, role: s.role, jobTitle: s.job_title, suspended: !!s.suspended_at, suspendedReason: s.suspended_reason,
+type S = { id: string; name: string; email_norm: string; role: Role; job_title: string | null; photo_file_id: string | null; suspended_at: string | null; suspended_reason: string | null }
+const COLS = 'id, name, email_norm, role, job_title, photo_file_id, suspended_at, suspended_reason'
+const view = (s: S, o: { permission: string; kind: string }[]) => ({ id: s.id, name: s.name, email: s.email_norm, role: s.role, jobTitle: s.job_title, photoFileId: s.photo_file_id, suspended: !!s.suspended_at, suspendedReason: s.suspended_reason,
   extra: o.filter((x) => x.kind === 'extra').map((x) => x.permission), removed: o.filter((x) => x.kind === 'removed').map((x) => x.permission) })
 const audit = (db: Db, p: { clinicId: string; staffId: string }, at: number, action: string, target: string, detail?: object) =>
   db.run('INSERT INTO audit_event (id, clinic_id, staff_id, action, target_type, target_id, detail, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', [newId(), p.clinicId, p.staffId, action, 'staff', target, detail ? JSON.stringify(detail) : null, toDb(at)])
@@ -50,7 +49,7 @@ teamRoutes.post('/', requires('team.create'), async (c) => {
   const email = str(b.email, 254, true)!.toLowerCase(), name = str(b.name, 200, true)!
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw bad('Invalid email')
   if (typeof b.password !== 'string' || !validPassword(b.password)) throw bad('Password must be 12 to 200 characters')
-  const id = newId(), hash = await hashPassword(b.password, c.env.PASSWORD_PEPPER)
+  const id = newId(), hash = await c.get('passwords').hash(b.password)
   try {
     await c.get('db').tx(async (db) => {
       await db.run('INSERT INTO staff (id, clinic_id, email_norm, name, role, job_title, password_hash, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', [id, p.clinicId, email, name, r, str(b.jobTitle, 100), hash, toDb(c.get('now'))])

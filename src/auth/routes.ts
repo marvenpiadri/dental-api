@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { deleteCookie, setCookie } from 'hono/cookie'
-import { hashPassword, needsRehash, validPassword, verifyPassword, dummyHash } from './password'
+import { DUMMY_HASH, validPassword, verifyStored } from './password'
 import { newId, randomToken, sha256Hex } from '../lib/ids'
 import { fromDb, toDb } from '../lib/time'
 import { ApiError, fail } from '../http/errors'
@@ -24,14 +24,18 @@ authRoutes.post('/login', async (c) => {
   const email = body.email.trim().toLowerCase()
   const [u] = await db.rows<StaffRow>('SELECT id, clinic_id, password_hash, failed_logins, locked_until, suspended_at, role, name FROM staff WHERE email_norm = $1', [email])
   // Same work whether or not the account exists, so timing does not reveal accounts.
-  const ok = await verifyPassword(body.password, u?.password_hash ?? dummyHash(), c.env.PASSWORD_PEPPER)
+  const passwords = c.get('passwords')
+  // A service outage throws 503 here: it is not a wrong password, so it neither counts as a failed login nor locks anyone.
+  const { ok, upgrade } = await verifyStored(passwords, body.password, u?.password_hash ?? DUMMY_HASH, c.env.PASSWORD_PEPPER)
   if (u?.locked_until && fromDb(u.locked_until) > now) return fail(c, new ApiError(429, 'locked', 'Too many attempts. Try again later.'))
   if (!u || !ok || u.suspended_at) {
     if (u) await db.run('UPDATE staff SET locked_until = CASE WHEN failed_logins + 1 >= $1 THEN $2::timestamptz ELSE locked_until END, failed_logins = failed_logins + 1 WHERE id = $3', [MAX_FAILURES, toDb(now + LOCK_MS), u.id])
     return bad()
   }
   if (u.failed_logins || u.locked_until) await db.run('UPDATE staff SET failed_logins = 0, locked_until = NULL WHERE id = $1', [u.id])
-  if (needsRehash(u.password_hash)) await db.run('UPDATE staff SET password_hash = $1 WHERE id = $2', [await hashPassword(body.password, c.env.PASSWORD_PEPPER), u.id])
+  if (upgrade) { // legacy PBKDF2 -> Argon2id. Compare-and-set: a password changed meanwhile is never overwritten. If the service is down the login still succeeds; the next one retries.
+    try { await db.run('UPDATE staff SET password_hash = $1 WHERE id = $2 AND password_hash = $3', [await passwords.hash(body.password), u.id, u.password_hash]) } catch { /* retried at next login */ }
+  }
   const token = randomToken()
   await db.run('INSERT INTO auth_session (token_hash, clinic_id, staff_id, created_at, last_seen_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
     [await sha256Hex(token), u.clinic_id, u.id, toDb(now), toDb(now), toDb(now + cfg.session.absoluteMs)])
@@ -58,8 +62,8 @@ authRoutes.post('/password', authenticate, async (c) => {
   if (!b || typeof b.current !== 'string' || typeof b.next !== 'string' || !validPassword(b.next)) return fail(c, new ApiError(400, 'bad_request', 'Password must be 12 to 200 characters'))
   const p = c.get('principal'), db = c.get('db')
   const [u] = await db.rows<{ password_hash: string }>('SELECT password_hash FROM staff WHERE id = $1 AND clinic_id = $2', [p.staffId, p.clinicId])
-  if (!u || !(await verifyPassword(b.current, u.password_hash, c.env.PASSWORD_PEPPER))) return fail(c, new ApiError(401, 'invalid_credentials', 'Current password is incorrect'))
-  await db.run('UPDATE staff SET password_hash = $1 WHERE id = $2 AND clinic_id = $3', [await hashPassword(b.next, c.env.PASSWORD_PEPPER), p.staffId, p.clinicId])
+  if (!u || !(await verifyStored(c.get('passwords'), b.current, u.password_hash, c.env.PASSWORD_PEPPER)).ok) return fail(c, new ApiError(401, 'invalid_credentials', 'Current password is incorrect'))
+  await db.run('UPDATE staff SET password_hash = $1 WHERE id = $2 AND clinic_id = $3', [await c.get('passwords').hash(b.next), p.staffId, p.clinicId])
   await db.run('UPDATE auth_session SET revoked_at = $1 WHERE staff_id = $2 AND revoked_at IS NULL AND token_hash <> $3', [toDb(c.get('now')), p.staffId, p.sessionHash])
   return c.body(null, 204)
 })

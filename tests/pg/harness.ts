@@ -1,31 +1,45 @@
 // Shared API test setup on a real PostgreSQL: two clinics (A, B), staff with several roles, logged in.
 import { createApp } from '../../src/app'
 import { createClinic } from '../../src/admin/bootstrap'
-import { hashPassword } from '../../src/auth/password'
+import { httpPasswordService, type PasswordService } from '../../src/auth/password-service'
+import { handle } from '../../password-service/src/handler'
 import { testDb } from './db'
 import type { FileStore } from '../../src/files/store'
 
-/** In-memory FileStore (tier: unit-level fake; R2 itself is not exercised here). */
+/**
+ * In-memory FileStore (tier: fake, not R2). Presigned URLs are `https://files.test/<put|get>/<key>`; `browserPut` plays the browser PUTting to a URL.
+ * The real S3 signing and HTTP is exercised separately by files.s3.test.ts.
+ */
 export function fakeStore() {
-  const m = new Map<string, Uint8Array>()
+  const m = new Map<string, { bytes: Uint8Array; type: string }>(), signed = new Map<string, string>()
   const store: FileStore = {
-    put: async (k, body, size) => { const b = new Uint8Array(await new Response(body).arrayBuffer()); if (b.length !== size) throw new Error('length'); m.set(k, b) },
-    get: async (k) => { const b = m.get(k); return b ? { body: new Response(b).body!, size: b.length } : null },
+    presignPut: async (k, type) => { const u = `https://files.test/put/${k}`; signed.set(u, type); return u },
+    presignGet: async (k, o) => `https://files.test/get/${k}?inline=${o.inline}&name=${encodeURIComponent(o.filename)}`,
+    head: async (k) => { const o = m.get(k); return o ? { size: o.bytes.length, contentType: o.type } : null },
+    peek: async (k, n) => m.get(k)?.bytes.subarray(0, n) ?? null,
     delete: async (k) => { m.delete(k) },
   }
-  return { store, m }
+  /** The browser's PUT to the presigned URL. Like R2, it refuses a Content-Type that is not the one that was signed. */
+  const browserPut = (url: string, bytes: Uint8Array, type: string) => {
+    if (signed.get(url) !== type) return 403
+    m.set(url.replace('https://files.test/put/', ''), { bytes, type }); return 200
+  }
+  return { store, m, browserPut }
 }
 
 export const NOW = Date.parse('2026-11-16T07:00:00Z'), PW = 'correct horse battery'
+export const SERVICE_SECRET = 'test-secret-test-secret-test-secret-0123'
+/** The REAL password service (Argon2id, HMAC check) called in-process: no network, same code that is deployed. */
+export const testPasswords = (o: { fetch?: typeof fetch; timeoutMs?: number } = {}): PasswordService => httpPasswordService({ url: 'http://password.test', secret: SERVICE_SECRET, fetch: o.fetch ?? ((u, i) => handle(new Request(u as string, i), { HASH_SECRET: SERVICE_SECRET })), timeoutMs: o.timeoutMs })
 const env = { PASSWORD_PEPPER: 'pepper', APP_ORIGIN: 'https://app.test', API_ORIGIN: 'https://api.test' }
 const H = { origin: 'https://app.test', 'x-dontalist-csrf': '1', 'content-type': 'application/json' }
 
 export async function harness() {
   const { db, drop, url } = await testDb(20)
-  const files = fakeStore(), app = createApp({ db: () => db, now: () => NOW, files: () => files.store })
-  const A = await createClinic(db, 'pepper', { clinicName: 'A', ownerEmail: 'owner@a.test', ownerName: 'OwnerA', password: PW }, NOW)
-  const B = await createClinic(db, 'pepper', { clinicName: 'B', ownerEmail: 'owner@b.test', ownerName: 'OwnerB', password: PW }, NOW)
-  const hash = await hashPassword(PW, 'pepper')
+  const files = fakeStore(), passwords = testPasswords(), app = createApp({ db: () => db, now: () => NOW, files: () => files.store, passwords: () => passwords })
+  const A = await createClinic(db, passwords, { clinicName: 'A', ownerEmail: 'owner@a.test', ownerName: 'OwnerA', password: PW }, NOW)
+  const B = await createClinic(db, passwords, { clinicName: 'B', ownerEmail: 'owner@b.test', ownerName: 'OwnerB', password: PW }, NOW)
+  const hash = await passwords.hash(PW)
   const cookies: Record<string, string> = {}
   const add = async (key: string, clinicId: string, role: string) =>
     db.run('INSERT INTO staff (id,clinic_id,email_norm,name,role,password_hash,created_at) VALUES ($1,$2,$3,$4,$5,$6,now())', [crypto.randomUUID(), clinicId, `${key.toLowerCase()}@x.test`, key, role, hash])

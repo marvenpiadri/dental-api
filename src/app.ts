@@ -6,7 +6,7 @@ import { patientRoutes } from './patients/routes'
 import { appointmentRoutes } from './appointments/routes'
 import { billingRoutes } from './billing/routes'
 import { clinicalRoutes } from './clinical/routes'
-import { documentRoutes } from './documents/routes'
+import { filesRoutes } from './files/routes'
 import { prescriptionRoutes } from './prescriptions/routes'
 import { settingsRoutes } from './settings/routes'
 import { recordRoutes } from './records/routes'
@@ -16,12 +16,13 @@ import { libraryRoutes } from './library/routes'
 import { mergeRoutes } from './patients/merge'
 import { reportRoutes } from './reports/routes'
 import { pgDb } from './db/client'
-import { r2Store } from './files/store'
+import { s3Store } from './files/store'
+import { httpPasswordService } from './auth/password-service'
 import { ApiError, fail } from './http/errors'
 import { base, security } from './http/middleware'
 import type { AppEnv, Deps } from './http/context'
 
-export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL ?? ''), files: (env) => r2Store(env.FILES) }) {
+export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL ?? ''), files: (env) => s3Store(env), passwords: (env) => httpPasswordService({ url: env.PASSWORD_SERVICE_URL, secret: env.PASSWORD_SERVICE_SECRET }) }) {
   const app = new Hono<AppEnv>()
   app.use('*', base(deps), ...security)
   app.get('/health', (c) => c.json({ ok: true, service: 'dontalist-api' }))
@@ -33,7 +34,7 @@ export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.conne
   app.route('/v1', resourceRoutes)
   app.route('/v1', billingRoutes)
   app.route('/v1', clinicalRoutes)
-  app.route('/v1', documentRoutes)
+  app.route('/v1', filesRoutes)
   app.route('/v1', prescriptionRoutes)
   app.route('/v1', settingsRoutes)
   app.route('/v1', recordRoutes)

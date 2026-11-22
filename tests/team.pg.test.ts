@@ -2,11 +2,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app'
 import { createClinic } from '../src/admin/bootstrap'
+import { testPasswords } from './pg/harness'
 import { testDb } from './pg/db'
 import type { PgDb } from '../src/db/client'
 
 const env = { PASSWORD_PEPPER: 'pepper', APP_ORIGIN: 'https://app.test', API_ORIGIN: 'https://api.test' }
 const NOW = Date.parse('2026-11-16T07:00:00Z'), PW = 'correct horse battery'
+const passwords = testPasswords()
 let db: PgDb, drop: () => Promise<void>, app: ReturnType<typeof createApp>
 const H = { origin: 'https://app.test', 'x-dontalist-csrf': '1', 'content-type': 'application/json' }
 const ck: Record<string, string> = {}, ids: Record<string, string> = {}
@@ -15,9 +17,9 @@ const json = async (r: Response) => (await r.json()) as any
 const login = async (email: string, pw = PW) => (await app.request('/v1/auth/login', { method: 'POST', headers: H, body: JSON.stringify({ email, password: pw }) }, env)).headers.get('set-cookie')?.split(';')[0] ?? ''
 
 beforeAll(async () => {
-  ({ db, drop } = await testDb()); app = createApp({ db: () => db, now: () => NOW })
-  await createClinic(db, 'pepper', { clinicName: 'A', ownerEmail: 'owner@a.test', ownerName: 'Owner', password: PW }, NOW)
-  await createClinic(db, 'pepper', { clinicName: 'B', ownerEmail: 'owner@b.test', ownerName: 'OwnerB', password: PW }, NOW)
+  ({ db, drop } = await testDb()); app = createApp({ db: () => db, now: () => NOW, passwords: () => passwords })
+  await createClinic(db, passwords, { clinicName: 'A', ownerEmail: 'owner@a.test', ownerName: 'Owner', password: PW }, NOW)
+  await createClinic(db, passwords, { clinicName: 'B', ownerEmail: 'owner@b.test', ownerName: 'OwnerB', password: PW }, NOW)
   ck.owner = await login('owner@a.test'); ck.ownerB = await login('owner@b.test')
   for (const [k, role] of [['admin', 'admin'], ['rec', 'reception'], ['dent', 'dentist']]) {
     ids[k] = (await json(await call('owner', 'POST', '/v1/staff', { name: k, email: `${k}@a.test`, role, password: PW }))).id; ck[k] = await login(`${k}@a.test`)
