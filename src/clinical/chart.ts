@@ -125,10 +125,10 @@ export async function applyChanges(db: Db, ctx: Ctx, changes: Change[]): Promise
     const rev = (cur?.rev ?? 0) + 1, json = JSON.stringify(after)
     if (isTooth) {
       if (cur) await db.run('UPDATE chart_tooth SET data = $1::jsonb, rev = $2, updated_at = $3, updated_by = $4 WHERE patient_id = $5 AND scope = $6 AND tooth = $7', [json, rev, toDb(ctx.now), ctx.staffId, ctx.patientId, ch.scope, ch.tooth])
-      else await db.run('INSERT INTO chart_tooth (patient_id, scope, tooth, clinic_id, data, rev, updated_at, updated_by) VALUES ($1,$2,$3,$4,$5::jsonb,1,$6,$7)', [ctx.patientId, ch.scope, ch.tooth, ctx.clinicId, json, toDb(ctx.now), ctx.staffId])
+      else if (!(await db.run('INSERT INTO chart_tooth (patient_id, scope, tooth, clinic_id, data, rev, updated_at, updated_by) VALUES ($1,$2,$3,$4,$5::jsonb,1,$6,$7) ON CONFLICT DO NOTHING', [ctx.patientId, ch.scope, ch.tooth, ctx.clinicId, json, toDb(ctx.now), ctx.staffId]))) throw stale(label) // first save of this tooth lost a race: nothing to lock yet, so the insert is the arbiter
     } else {
       if (cur) await db.run('UPDATE chart_section SET data = $1::jsonb, rev = $2, updated_at = $3, updated_by = $4 WHERE patient_id = $5 AND section = $6', [json, rev, toDb(ctx.now), ctx.staffId, ctx.patientId, ch.scope])
-      else await db.run('INSERT INTO chart_section (patient_id, section, clinic_id, data, rev, updated_at, updated_by) VALUES ($1,$2,$3,$4::jsonb,1,$5,$6)', [ctx.patientId, ch.scope, ctx.clinicId, json, toDb(ctx.now), ctx.staffId])
+      else if (!(await db.run('INSERT INTO chart_section (patient_id, section, clinic_id, data, rev, updated_at, updated_by) VALUES ($1,$2,$3,$4::jsonb,1,$5,$6) ON CONFLICT DO NOTHING', [ctx.patientId, ch.scope, ctx.clinicId, json, toDb(ctx.now), ctx.staffId]))) throw stale(label)
     }
     await writeRevision(db, { clinicId: ctx.clinicId, patientId: ctx.patientId, groupId, scope: ch.scope, tooth: ch.tooth ?? null, rev, op, before, after, reason, staffId: ctx.staffId, now: ctx.now })
     out.push({ scope: ch.scope, tooth: ch.tooth ?? null, rev })

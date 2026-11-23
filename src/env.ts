@@ -1,8 +1,6 @@
 /** Worker bindings. Secrets come from `.dev.vars` locally and `wrangler secret put` in deployed environments. */
 export type Bindings = {
-  /** Production: Cloudflare Hyperdrive in front of Neon (direct string configured in Hyperdrive). */
-  HYPERDRIVE?: { connectionString: string }
-  /** Local `wrangler dev` / tests without Hyperdrive. Never committed. */
+  /** Neon connection string, secret. Deployed: the POOLED (`-pooler`) host, runtime role. Local dev: any PostgreSQL. Never committed. */
   DATABASE_URL?: string
   /** Private R2 bucket, reached through its S3 API. Never public: uploads and reads use short-lived signed URLs issued after authorization. */
   R2_ENDPOINT?: string // https://<account>.r2.cloudflarestorage.com[/<bucket>]

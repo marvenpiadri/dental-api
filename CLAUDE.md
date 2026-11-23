@@ -15,7 +15,7 @@ The frontend is currently being completed separately. Do not merge the Angular a
 - Hono as the API framework
 - Cloudflare Workers as the runtime, developed/deployed with Wrangler
 - Neon PostgreSQL as the database (decided 2026-11-20; TiDB/MySQL is removed, see `docs/postgres-architecture.md`). The database is named `dontalist` (Neon project `red-meadow-47831446`, default branch)
-- `pg` (node-postgres) through Cloudflare Hyperdrive as the driver
+- `pg` (node-postgres) with a plain connection to Neon's pooled host (`DATABASE_URL` Worker secret) as the driver; no Hyperdrive (owner decision 2026-11-23)
 - Cloudflare R2 for private files/documents when that integration is implemented
 
 This is a Cloudflare Workers application, **not a conventional Node.js server**. Workers run on a V8/Web APIs runtime with a Node.js compatibility layer, not a complete Node.js environment.
@@ -29,7 +29,7 @@ This is a Cloudflare Workers application, **not a conventional Node.js server**.
 
 Architecture, data model, connection strategy and roadmap: `docs/postgres-architecture.md` (the old TiDB design was deleted).
 
-- Use `pg` via Hyperdrive (`env.HYPERDRIVE.connectionString`): one client per request, `ctx.waitUntil(client.end())`, short transactions, no session-level state (`SET` without `LOCAL`, session advisory locks, `LISTEN`). Neon's direct (non-pooled) string goes into Hyperdrive.
+- Use `pg` with `env.DATABASE_URL` (Neon's pooled `-pooler` host): one client per request, `ctx.waitUntil(client.end())`, short transactions, no session-level state (`SET` without `LOCAL`, session advisory locks, `LISTEN`). Migrations use the direct (non-pooled) owner string. Neon's Data API roles (`anonymous`, `authenticated`) must hold no privileges on clinic tables (migration 0011).
 - Use PostgreSQL natively: `uuid`, `timestamptz`, `numeric` for money, CHECK constraints, composite `(clinic_id, id)` foreign keys for tenant isolation, exclusion constraints, JSONB where the data is document-like. No ORM; parameterized SQL (`$1`) only.
 - Clinical charts (odontogram, periodontogram): never replace a whole chart from the client. Targeted per-tooth/section updates with `expectedRev`, an append-only revision log in the same transaction, server-side restore only.
 - Migrations: forward-only SQL in `db/migrations`, applied in a transaction each, checksummed in `schema_migration`.

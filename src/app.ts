@@ -22,7 +22,7 @@ import { ApiError, fail } from './http/errors'
 import { base, security } from './http/middleware'
 import type { AppEnv, Deps } from './http/context'
 
-export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL ?? ''), files: (env) => s3Store(env), passwords: (env) => httpPasswordService({ url: env.PASSWORD_SERVICE_URL, secret: env.PASSWORD_SERVICE_SECRET }) }) {
+export function createApp(deps: Deps = { db: (env) => pgDb(env.DATABASE_URL ?? ''), files: (env) => s3Store(env), passwords: (env) => httpPasswordService({ url: env.PASSWORD_SERVICE_URL, secret: env.PASSWORD_SERVICE_SECRET }) }) {
   const app = new Hono<AppEnv>()
   app.use('*', base(deps), ...security)
   app.get('/health', (c) => c.json({ ok: true, service: 'dontalist-api' }))

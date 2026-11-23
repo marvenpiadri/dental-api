@@ -36,8 +36,8 @@ const over = (q: Queryable, tx: Db['tx']): Db => ({
 export type PgDb = Db & { end(): Promise<void> }
 
 /**
- * Lazy pool. In a Worker use the Hyperdrive string and a small `max` (one request, one or two connections), then
- * `ctx.waitUntil(db.end())`. Hyperdrive does the real pooling; the direct (non-pooled) Neon string goes into Hyperdrive.
+ * Lazy pool. In a Worker use Neon's pooled (`-pooler`) host and a small `max` (one request, one or two connections), then
+ * `ctx.waitUntil(db.end())`. Neon's pooler does the real pooling, so no session state (SET without LOCAL, session advisory locks, LISTEN).
  */
 export function pgDb(connectionString: string, opts: { max?: number; statementTimeoutMs?: number } = {}): PgDb {
   if (!connectionString) throw new DbError('database connection string is not configured')

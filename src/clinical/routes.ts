@@ -40,7 +40,7 @@ clinicalRoutes.put('/patients/:id/medical', requires('clinical.edit'), async (c)
     if ((before?.version ?? 0) !== exp) throw stale()
     const nv = exp + 1, args = [JSON.stringify(next.conditions), next.allergies, next.medications, JSON.stringify(next.legacyMatched)]
     if (before) await db.run('UPDATE patient_medical SET conditions = $1::jsonb, allergies = $2, medications = $3, legacy_matched = $4::jsonb, version = $5, updated_at = $6, updated_by = $7 WHERE patient_id = $8', [...args, nv, t, p.staffId, pid])
-    else await db.run('INSERT INTO patient_medical (conditions, allergies, medications, legacy_matched, version, updated_at, updated_by, patient_id, clinic_id) VALUES ($1::jsonb,$2,$3,$4::jsonb,$5,$6,$7,$8,$9)', [...args, nv, t, p.staffId, pid, p.clinicId])
+    else if (!(await db.run('INSERT INTO patient_medical (conditions, allergies, medications, legacy_matched, version, updated_at, updated_by, patient_id, clinic_id) VALUES ($1::jsonb,$2,$3,$4::jsonb,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING', [...args, nv, t, p.staffId, pid, p.clinicId]))) throw stale() // first save: no row to lock, a concurrent first save already took it
     await db.run('INSERT INTO medical_revision (id, clinic_id, patient_id, version, before, after, staff_id, at) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8)',
       [newId(), p.clinicId, pid, nv, before ? JSON.stringify({ conditions: before.conditions, allergies: before.allergies, medications: before.medications, legacyMatched: before.legacy_matched }) : null, JSON.stringify(next), p.staffId, t])
     return nv

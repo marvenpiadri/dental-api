@@ -116,7 +116,7 @@ The frontend plan (S1-S8 in the frontend repo's `docs/product-audit.md` §3c) co
 
 ## 8. Open decisions for the owner
 1. Neon region (Europe recommended) and the data-protection position for patient data hosted outside Morocco (Law 09-08/CNDP).
-2. Hyperdrive requires a Cloudflare account setup; confirm it is available on the account used for production.
+2. ~~Hyperdrive~~ not used (owner decision 2026-11-23).
 3. Backup retention: Neon's restore window depends on the plan; choose a plan whose window matches the clinic's recovery needs, and decide where daily dumps are stored.
 
 
@@ -141,4 +141,8 @@ Known limit: search with `LIKE '%x%'` across name, phone and number cannot use t
 - **Database:** Neon project `red-meadow-47831446`, default branch, database **`dontalist`** (owner `neondb_owner`). TiDB is removed from the project. Migrations 0001-0010 are applied (recorded in `schema_migration` with checksums). The applied schema was checked against a database built from the repository's migration files: columns, constraints, indexes, triggers and functions fingerprints are identical.
 - **Tests (sandbox, real PostgreSQL):** 197 passed, 1 skipped on the embedded PostgreSQL 18; the PostgreSQL 16 run passed 190/190 before the edge tests were added. The sandbox cannot open a connection to Neon, so no suite has run against Neon itself.
 - **Added since P7:** central file storage on R2 (`docs/r2-storage.md`, migration 0010 replaces the `document` table with `file`), password hashing in a separate Neon Function (`docs/password-service.md`), edge tests (`tests/edges.pg.test.ts`).
-- **Still open:** Hyperdrive deploy and Worker secrets, a real backup drill on Neon, the frontend wiring (stages S2-S8), the Neon region / CNDP decision.
+- **Connection (owner decision 2026-11-23):** no Hyperdrive. The Worker connects with plain `pg` to Neon's pooled host through the `DATABASE_URL` secret (sections 3 and P7 above that mention Hyperdrive are superseded). Migrations still need the direct owner string. Not measured: Worker-to-Neon latency (the sandbox cannot reach Neon).
+- **Neon Data API:** enabled by the owner on `dontalist`. It runs requests as `anonymous` / `authenticated`, and Neon had granted `authenticated` read/write on all 53 tables with no row-level security, which would let any valid Neon Auth token bypass the API's clinic isolation. Migrations 0011-0012 revoke every privilege from both roles (and from future objects); with that the Data API can read nothing. Do not grant these roles anything without row-level security.
+- **Data location (owner decision 2026-11-23):** Neon in eu-central-1 and R2 in WEUR are accepted; the Law 09-08/CNDP point is not treated as a blocker.
+- **Patient map link:** `patient.map_url`, only `https://maps.google.com/?ll=<lat>,<lng>` (checked in the API and by a CHECK constraint; migration 0011).
+- **Still open:** Worker deploy and secrets (`DATABASE_URL`, `R2_*`, `PASSWORD_SERVICE_*`), a real backup drill on Neon, the frontend wiring (stages S2-S8).

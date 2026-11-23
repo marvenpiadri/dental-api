@@ -60,3 +60,20 @@ describe('concurrent clinical saves', () => {
     expect(revs.map((r) => r.version)).toEqual([1, 2, 3, 4])
   })
 })
+
+describe('first saves racing (no row exists yet to lock)', () => {
+  it('simultaneous first saves of one tooth and one section: one wins, the others are 409, never 5xx', async () => {
+    const p2 = (await h.json(await h.call('recA', 'POST', '/v1/patients', { fullName: 'Race Chart' }))).id
+    expect((await h.call('dentA', 'POST', `/v1/patients/${p2}/chart`, { chart: { version: '2.22', teeth: { '11': { status: 'present' } } } })).status).toBe(201)
+    const chart = (tooth: string, i: number) => h.call('dentA', 'PATCH', `/v1/patients/${p2}/chart`, { changes: [{ scope: 'teeth', tooth, expectedRev: 0, set: { n: i } }] })
+    const rs = await Promise.all([1, 2, 3, 4, 5, 6].map((i) => chart('16', i)))
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409, 409])
+  })
+  it('repeat the medical race several times for a fresh patient each round', async () => {
+    for (let round = 0; round < 5; round++) {
+      const id = (await h.json(await h.call('recA', 'POST', '/v1/patients', { fullName: `Race ${round}` }))).id
+      const rs = await Promise.all([1, 2, 3, 4, 5, 6, 7, 8].map((i) => h.call('dentA', 'PUT', `/v1/patients/${id}/medical`, { expectedVersion: 0, conditions: [`r${i}`] })))
+      expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409, 409, 409, 409])
+    }
+  })
+})

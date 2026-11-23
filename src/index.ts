@@ -8,7 +8,7 @@ export default {
   fetch: createApp().fetch,
   // Hourly (wrangler.jsonc triggers): delete abandoned uploads and replaced/removed pictures from the bucket.
   async scheduled(_event: ScheduledController, env: Bindings, ctx: ExecutionContext) {
-    const db = pgDb(env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL ?? '')
+    const db = pgDb(env.DATABASE_URL ?? '')
     ctx.waitUntil(purgeFiles(db, s3Store(env), Date.now()).finally(() => db.end()))
   },
 }

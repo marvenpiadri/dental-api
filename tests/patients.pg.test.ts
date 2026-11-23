@@ -72,4 +72,15 @@ describe('patients', () => {
     expect((await h.json(await h.call('recA', 'GET', '/v1/patients?q=edited&archived=true'))).items).toHaveLength(1)
     expect((await h.call('ownerA', 'POST', `/v1/patients/${p.id}/archive`)).status).toBe(404)
   })
+  it('keeps a Google Maps location link, only in the plain coordinate form', async () => {
+    const link = 'https://maps.google.com/?ll=33.5731,-7.5898'
+    const made = await h.json(await h.call('recA', 'POST', '/v1/patients', { fullName: 'Map Patient', mapUrl: link })); expect(made.id).toBeTruthy()
+    expect((await h.json(await h.call('recA', 'GET', `/v1/patients/${made.id}`))).mapUrl).toBe(link)
+    for (const bad of ['http://maps.google.com/?ll=1,2', 'https://evil.test/?ll=1,2', 'https://maps.google.com/?ll=91,0', 'https://maps.google.com/?ll=0,181', 'https://maps.google.com/?ll=1,2&q=x', 'https://maps.google.com/?ll=1,2#x', 'https://maps.google.com.evil.test/?ll=1,2', 'javascript:alert(1)', 'https://maps.google.com/?ll=a,b'])
+      expect((await h.call('recA', 'PATCH', `/v1/patients/${made.id}`, { mapUrl: bad })).status, bad).toBe(400)
+    expect((await h.json(await h.call('recA', 'GET', `/v1/patients/${made.id}`))).mapUrl).toBe(link) // refused edits changed nothing
+    expect((await h.call('recA', 'PATCH', `/v1/patients/${made.id}`, { mapUrl: null })).status).toBe(204)
+    expect((await h.json(await h.call('recA', 'GET', `/v1/patients/${made.id}`))).mapUrl).toBeNull()
+    await expect(h.db.run("UPDATE patient SET map_url = 'https://evil.test/' WHERE id = $1", [made.id])).rejects.toBeTruthy() // the database refuses it too
+  })
 })
