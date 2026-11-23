@@ -6,6 +6,7 @@ import { decodeCursor, encodeCursor, page, parseLimit } from '../lib/pagination'
 import { isUuid, newId } from '../lib/ids'
 import { nextSeq, patientNumber } from '../lib/numbering'
 import { toDb } from '../lib/time'
+import { appointmentCols, appointmentOut } from '../appointments/shape'
 
 export const patientRoutes = new Hono<AppEnv>()
 patientRoutes.use('*', authenticate)
@@ -116,4 +117,17 @@ patientRoutes.post('/:id/unarchive', requires('patients.manage'), async (c) => {
   const n = await c.get('db').run('UPDATE patient SET archived_at = NULL WHERE id = $1 AND clinic_id = $2 AND archived_at IS NOT NULL AND merged_into_id IS NULL', [id, c.get('principal').clinicId])
   if (n !== 1) throw notFound()
   return c.body(null, 204)
+})
+
+// One patient's appointments, newest first, keyset-paginated (the profile's visits tab; never the whole history at once).
+patientRoutes.get('/:id/appointments', requires('appointments.view'), async (c) => {
+  const id = c.req.param('id'); if (!isUuid(id)) throw notFound()
+  const q = c.req.query(), limit = parseLimit(q.limit); if (limit === null) throw bad('limit must be 1-100')
+  const cur = decodeCursor(q.cursor); if (cur === null || (cur && (!isUuid(cur[1]) || Number.isNaN(Date.parse(cur[0]))))) throw bad('Invalid cursor')
+  const p: unknown[] = [c.get('principal').clinicId, id]; let after = ''
+  if (cur) { after = 'AND (start_at, id) < ($3::timestamptz, $4::uuid)'; p.push(cur[0], cur[1]) }
+  p.push(limit + 1)
+  const rows = await c.get('db').rows(`SELECT ${appointmentCols} FROM appointment WHERE clinic_id = $1 AND patient_id = $2 ${after} ORDER BY start_at DESC, id DESC LIMIT $${p.length}`, p)
+  const r = page(rows, limit, (x) => encodeCursor(String(x.start_at), String(x.id)))
+  return c.json({ items: r.items.map(appointmentOut), nextCursor: r.nextCursor })
 })

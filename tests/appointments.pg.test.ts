@@ -90,14 +90,15 @@ describe('concurrency', () => {
   it('two simultaneous reschedules with the same version: one wins, the other is stale or taken', async () => {
     const id = await idOf(await book({ startAt: iso(19), endAt: iso(19, 30) }))
     const rs = await Promise.all([h.call('recA', 'POST', `/v1/appointments/${id}/reschedule`, { version: 1, startAt: iso(20), endAt: iso(20, 30) }), h.call('recA', 'POST', `/v1/appointments/${id}/reschedule`, { version: 1, startAt: iso(21), endAt: iso(21, 30) })])
-    expect(rs.map((r) => r.status).sort()).toEqual([204, 409])
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409])
   })
 })
 
 describe('reschedule and status', () => {
   it('reschedules with a version (own old range allowed), keeps history, rejects a stale version', async () => {
     const id = await idOf(await book({ startAt: iso(7), endAt: iso(7, 30) }))
-    expect((await h.call('recA', 'POST', `/v1/appointments/${id}/reschedule`, { version: 1, startAt: iso(7, 15), endAt: iso(7, 45) })).status).toBe(204)
+    const moved = await h.call('recA', 'POST', `/v1/appointments/${id}/reschedule`, { version: 1, startAt: iso(7, 15), endAt: iso(7, 45) })
+    expect(moved.status).toBe(200); expect(await h.json(moved)).toEqual({ version: 2 }) // the new revision comes back, so the browser need not re-read
     const stale = await h.call('recA', 'POST', `/v1/appointments/${id}/reschedule`, { version: 1, startAt: iso(8), endAt: iso(8, 30) })
     expect(stale.status).toBe(409); expect((await h.json(stale)).error.code).toBe('stale')
     const hist = await h.json(await h.call('recA', 'GET', `/v1/appointments/${id}/history`))
@@ -113,7 +114,7 @@ describe('reschedule and status', () => {
     const id = await idOf(await book({ startAt: iso(3), endAt: iso(3, 30) }))
     const st = (s: string, who = 'recA') => h.call(who, 'POST', `/v1/appointments/${id}/status`, { status: s })
     expect((await st('completed')).status).toBe(422)
-    expect((await st('cancelled')).status).toBe(204)
+    expect((await st('cancelled')).status).toBe(200)
     expect((await book({ startAt: iso(3), endAt: iso(3, 30) })).status).toBe(201) // freed
     expect((await st('scheduled')).status).toBe(409) // taken meanwhile
     expect((await h.call('recA', 'POST', `/v1/appointments/${id}/reschedule`, { version: 2, startAt: iso(4), endAt: iso(4, 30) })).status).toBe(422) // cancelled cannot move
@@ -132,5 +133,22 @@ describe('calendar read', () => {
     for (const bad of [`limit=101`, `limit=0`, 'cursor=%25%25']) expect((await h.call('recA', 'GET', `/v1/appointments?${q}&${bad}`)).status).toBe(400)
     expect((await h.call('recA', 'GET', '/v1/appointments?from=x&to=y')).status).toBe(400)
     expect((await h.call('recA', 'GET', `/v1/appointments?from=${iso(0)}&to=2027-06-01T00:00:00Z`)).status).toBe(400)
+  })
+})
+
+describe('a patient\'s appointment list', () => {
+  it('is newest first, keyset-paginated, bounded, and isolated per clinic', async () => {
+    const p = await mk('recA', '/v1/patients', { fullName: 'History Hana' })
+    for (let i = 0; i < 5; i++) expect((await book({ patientId: p, startAt: iso(8 + i, 0, 20), endAt: iso(8 + i, 30, 20) })).status).toBe(201)
+    const first = await h.json(await h.call('recA', 'GET', `/v1/patients/${p}/appointments?limit=2`))
+    expect(first.items).toHaveLength(2); expect(first.nextCursor).toBeTruthy()
+    expect(first.items[0].startAt > first.items[1].startAt).toBe(true)
+    const rest = await h.json(await h.call('recA', 'GET', `/v1/patients/${p}/appointments?limit=100&cursor=${encodeURIComponent(first.nextCursor)}`))
+    expect(rest.items).toHaveLength(3); expect(rest.nextCursor).toBeNull()
+    expect(new Set([...first.items, ...rest.items].map((x: { id: string }) => x.id)).size).toBe(5)
+    expect((await h.call('recA', 'GET', `/v1/patients/${p}/appointments?limit=101`)).status).toBe(400)
+    expect((await h.call('recA', 'GET', `/v1/patients/${p}/appointments?cursor=zzz`)).status).toBe(400)
+    expect((await h.json(await h.call('recB', 'GET', `/v1/patients/${p}/appointments`))).items).toHaveLength(0)
+    expect((await h.call('acctA', 'GET', `/v1/patients/${p}/appointments`)).status).toBe(403)
   })
 })

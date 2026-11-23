@@ -6,6 +6,7 @@ import { ExclusionError, type Db } from '../db/client'
 import { decodeCursor, encodeCursor, page, parseLimit } from '../lib/pagination'
 import { isUuid, newId } from '../lib/ids'
 import { toDb } from '../lib/time'
+import { appointmentCols, appointmentOut } from './shape'
 
 export const appointmentRoutes = new Hono<AppEnv>()
 appointmentRoutes.use('*', authenticate)
@@ -41,8 +42,7 @@ const checkTimes = (s: number, e: number) => {
   if (s % GRID_MS || e % GRID_MS) throw invalid('times must be on the 5-minute grid')
   const m = (e - s) / 60_000; if (m < MIN_MIN || m > MAX_MIN) throw invalid('duration must be 15 to 480 minutes')
 }
-const COLS = 'id, patient_id, dentist_id, chair_id, type, start_at, end_at, status, reason, note, reminded_at, version'
-const out = (r: Record<string, unknown>) => ({ id: r.id, patientId: r.patient_id, dentistId: r.dentist_id, chairId: r.chair_id, type: r.type, startAt: r.start_at, endAt: r.end_at, status: r.status, reason: r.reason, note: r.note, remindedAt: r.reminded_at, version: r.version })
+const COLS = appointmentCols, out = appointmentOut
 
 // Calendar read: a date range is mandatory (no unbounded reads), keyset-paginated by (start_at, id).
 appointmentRoutes.get('/', requires('appointments.view'), async (c) => {
@@ -98,7 +98,7 @@ appointmentRoutes.post('/:id/reschedule', requires('appointments.edit'), async (
   if (!Number.isInteger(b.version)) throw bad()
   const s = instant(b.startAt), e = instant(b.endAt); checkTimes(s, e)
   const dentistId = b.dentistId === undefined ? null : uuid(b.dentistId), chairId = b.chairId === undefined ? null : uuid(b.chairId)
-  await c.get('db').tx(async (db) => {
+  const version = await c.get('db').tx(async (db) => {
     const a = await lockOne(db, p.clinicId, c.req.param('id'))
     if (!MOVABLE.includes(a.status)) throw invalid('only scheduled or confirmed appointments can be moved')
     if (a.version !== b.version) throw stale()
@@ -107,22 +107,24 @@ appointmentRoutes.post('/:id/reschedule', requires('appointments.edit'), async (
     await db.run('UPDATE appointment SET start_at = $1, end_at = $2, dentist_id = $3, chair_id = $4, version = version + 1, updated_at = $5 WHERE id = $6', [toDb(s), toDb(e), d, ch, toDb(now), a.id])
     await db.run(`INSERT INTO appointment_schedule_change (id, clinic_id, appointment_id, from_start, to_start, from_dentist_id, to_dentist_id, from_chair_id, to_chair_id, staff_id, at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, [newId(), p.clinicId, a.id, a.start_at, toDb(s), a.dentist_id, d, a.chair_id, ch, p.staffId, toDb(now)])
+    return a.version + 1
   })
-  return c.body(null, 204)
+  return c.json({ version })
 })
 
 appointmentRoutes.post('/:id/status', requires('appointments.edit'), async (c) => {
   const b = await json(c), p = c.get('principal'), now = c.get('now'), to = typeof b.status === 'string' ? b.status : ''
   const reason = opt(b.reason, 500), version = b.version === undefined ? null : Number.isInteger(b.version) ? (b.version as number) : (() => { throw bad() })()
-  await c.get('db').tx(async (db) => {
+  const next = await c.get('db').tx(async (db) => {
     const a = await lockOne(db, p.clinicId, c.req.param('id'))
     if (version !== null && a.version !== version) throw stale()
     if (!TRANSITIONS[a.status]?.includes(to)) throw invalid(`cannot go from ${a.status} to ${to}`)
     // Reinstating a cancelled/no-show appointment makes it active again; the EXCLUDE constraint refuses it if someone took the time (409 slot_taken).
     await db.run('UPDATE appointment SET status = $1, version = version + 1, updated_at = $2 WHERE id = $3', [to, toDb(now), a.id])
     await db.run('INSERT INTO appointment_status_change (id, clinic_id, appointment_id, from_status, to_status, staff_id, reason, at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', [newId(), p.clinicId, a.id, a.status, to, p.staffId, reason, toDb(now)])
+    return a.version + 1
   })
-  return c.body(null, 204)
+  return c.json({ version: next })
 })
 
 // Status and reschedule history of one appointment, on demand (kept out of the calendar list).
