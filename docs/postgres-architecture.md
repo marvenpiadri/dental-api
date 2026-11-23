@@ -135,3 +135,10 @@ Load test: one clinic, 20,000 patients, 120,000 appointments, `ANALYZE`d, `EXPLA
 | Patient appointment history, page of 26 | `ix_appt_patient_start` bitmap + sort | 1.5 ms |
 
 Known limit: search with `LIKE '%x%'` across name, phone and number cannot use the trigram indexes because of the OR plus the keyset ORDER BY, so a rare or empty search costs time linear in the clinic's patient count (about 11 ms at 20k). Fine for one clinic; if a clinic reaches several hundred thousand patients, split search into per-column trigram queries. Not measured: concurrent load, Neon latency, Hyperdrive.
+
+## Status 2026-11-23
+
+- **Database:** Neon project `red-meadow-47831446`, default branch, database **`dontalist`** (owner `neondb_owner`). TiDB is removed from the project. Migrations 0001-0010 are applied (recorded in `schema_migration` with checksums). The applied schema was checked against a database built from the repository's migration files: columns, constraints, indexes, triggers and functions fingerprints are identical.
+- **Tests (sandbox, real PostgreSQL):** 197 passed, 1 skipped on the embedded PostgreSQL 18; the PostgreSQL 16 run passed 190/190 before the edge tests were added. The sandbox cannot open a connection to Neon, so no suite has run against Neon itself.
+- **Added since P7:** central file storage on R2 (`docs/r2-storage.md`, migration 0010 replaces the `document` table with `file`), password hashing in a separate Neon Function (`docs/password-service.md`), edge tests (`tests/edges.pg.test.ts`).
+- **Still open:** Hyperdrive deploy and Worker secrets, a real backup drill on Neon, the frontend wiring (stages S2-S8), the Neon region / CNDP decision.
