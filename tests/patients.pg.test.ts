@@ -72,6 +72,21 @@ describe('patients', () => {
     expect((await h.json(await h.call('recA', 'GET', '/v1/patients?q=edited&archived=true'))).items).toHaveLength(1)
     expect((await h.call('ownerA', 'POST', `/v1/patients/${p.id}/archive`)).status).toBe(404)
   })
+  it('restores an archived file (manage only), lists archived-only and alert-only, and keeps merged files archived', async () => {
+    const p = await mk('recA', { fullName: 'Restore Rita', alert: 'anticoagulants' }), q = await mk('recA', { fullName: 'Restore Quiet' })
+    expect((await h.call('ownerA', 'POST', `/v1/patients/${p.id}/archive`)).status).toBe(204)
+    const names = async (qs: string) => (await h.json(await h.call('recA', 'GET', `/v1/patients?q=restore&${qs}`))).items.map((x: { fullName: string }) => x.fullName)
+    expect(await names('archived=true')).toEqual(['Restore Rita'])
+    expect(await names('alert=true')).toEqual([])
+    expect((await h.call('dentA', 'POST', `/v1/patients/${p.id}/unarchive`)).status).toBe(403)
+    expect((await h.call('ownerB', 'POST', `/v1/patients/${p.id}/unarchive`)).status).toBe(404)
+    expect((await h.call('ownerA', 'POST', `/v1/patients/${p.id}/unarchive`)).status).toBe(204)
+    expect((await h.call('ownerA', 'POST', `/v1/patients/${p.id}/unarchive`)).status).toBe(404)
+    expect(await names('alert=true')).toEqual(['Restore Rita'])
+    expect(await names('')).toEqual(['Restore Quiet', 'Restore Rita'])
+    expect((await h.call('ownerA', 'POST', `/v1/patients/${q.id}/merge`, { intoId: p.id })).status).toBe(204)
+    expect((await h.call('ownerA', 'POST', `/v1/patients/${q.id}/unarchive`)).status).toBe(404)
+  })
   it('keeps a Google Maps location link, only in the plain coordinate form', async () => {
     const link = 'https://maps.google.com/?ll=33.5731,-7.5898'
     const made = await h.json(await h.call('recA', 'POST', '/v1/patients', { fullName: 'Map Patient', mapUrl: link })); expect(made.id).toBeTruthy()

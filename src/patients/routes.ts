@@ -66,7 +66,8 @@ patientRoutes.get('/', requires('patients.view'), async (c) => {
   const p: unknown[] = [c.get('principal').clinicId]; let where = ''
   const add = (v: unknown) => `$${p.push(v)}`
   if (q.q?.trim()) { const like = add('%' + likeEscape(norm(q.q)) + '%'); where += ` AND (search_name LIKE ${like} ESCAPE '!' OR phone LIKE ${like} ESCAPE '!' OR lower(number) LIKE ${like} ESCAPE '!')` }
-  if (q.archived !== 'true') where += ' AND archived_at IS NULL'
+  if (q.archived === 'true') where += ' AND archived_at IS NOT NULL'; else where += ' AND archived_at IS NULL'
+  if (q.alert === 'true') where += " AND alert IS NOT NULL AND alert <> ''"
   if (cur) { const a = add(cur[0]); where += ` AND (search_name, id) > (${a}, ${add(cur[1])}::uuid)` }
   const rows = await c.get('db').rows(`SELECT ${FIELDS}, search_name FROM patient WHERE clinic_id = $1${where} ORDER BY search_name, id LIMIT ${add(limit + 1)}`, p)
   const r = page(rows, limit, (x) => encodeCursor(String(x.search_name), String(x.id)))
@@ -105,6 +106,14 @@ patientRoutes.patch('/:id', requires('patients.edit'), async (c) => {
 patientRoutes.post('/:id/archive', requires('patients.manage'), async (c) => {
   const id = c.req.param('id'); if (!isUuid(id)) throw notFound()
   const n = await c.get('db').run('UPDATE patient SET archived_at = $1 WHERE id = $2 AND clinic_id = $3 AND archived_at IS NULL', [toDb(c.get('now')), id, c.get('principal').clinicId])
+  if (n !== 1) throw notFound()
+  return c.body(null, 204)
+})
+
+// Restoring brings an archived file back; a file that was merged into another stays archived (its records moved).
+patientRoutes.post('/:id/unarchive', requires('patients.manage'), async (c) => {
+  const id = c.req.param('id'); if (!isUuid(id)) throw notFound()
+  const n = await c.get('db').run('UPDATE patient SET archived_at = NULL WHERE id = $1 AND clinic_id = $2 AND archived_at IS NOT NULL AND merged_into_id IS NULL', [id, c.get('principal').clinicId])
   if (n !== 1) throw notFound()
   return c.body(null, 204)
 })
