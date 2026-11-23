@@ -42,7 +42,6 @@ export function createApp(deps: Deps = { db: (env) => pgDb(env.HYPERDRIVE?.conne
   app.route('/v1', visitRoutes)
   app.route('/v1', libraryRoutes)
   app.route('/v1', reportRoutes)
-  // PostgreSQL port in progress (roadmap P5-P6): documents, prescriptions are not mounted until ported and tested (legacy-tidb/).
   app.notFound((c) => fail(c, new ApiError(404, 'not_found', 'Not found')))
   app.onError((e, c) => {
     // Internal details stay in platform logs, never in the response.

@@ -70,7 +70,7 @@ describe('stream limit', () => {
   })
 })
 describe('config', () => {
-  const e = { TIDB_DATABASE_URL: 'x', PASSWORD_PEPPER: 'p', APP_ORIGIN: 'https://dontalist.com', API_ORIGIN: 'https://api.dontalist.com' }
+  const e = { PASSWORD_PEPPER: 'p', APP_ORIGIN: 'https://dontalist.com', API_ORIGIN: 'https://api.dontalist.com' }
   it('defaults to host-only __Host- cookie and APP_ORIGIN for CORS', () => {
     const c = loadConfig(e); expect(c.cookie.name).toBe('__Host-dl_session'); expect(c.cookie.domain).toBeUndefined(); expect(c.corsOrigins).toEqual(['https://dontalist.com'])
   })

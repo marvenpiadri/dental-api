@@ -14,7 +14,7 @@ The frontend is currently being completed separately. Do not merge the Angular a
 - TypeScript
 - Hono as the API framework
 - Cloudflare Workers as the runtime, developed/deployed with Wrangler
-- Neon PostgreSQL as the database (decided 2026-11-20; TiDB/MySQL is abandoned, see `docs/postgres-architecture.md`)
+- Neon PostgreSQL as the database (decided 2026-11-20; TiDB/MySQL is removed, see `docs/postgres-architecture.md`). The database is named `dontalist` (Neon project `red-meadow-47831446`, default branch)
 - `pg` (node-postgres) through Cloudflare Hyperdrive as the driver
 - Cloudflare R2 for private files/documents when that integration is implemented
 
@@ -27,7 +27,7 @@ This is a Cloudflare Workers application, **not a conventional Node.js server**.
 
 ## Database
 
-Architecture, data model, connection strategy and roadmap: `docs/postgres-architecture.md` (`docs/architecture.md` is the superseded TiDB design).
+Architecture, data model, connection strategy and roadmap: `docs/postgres-architecture.md` (the old TiDB design was deleted).
 
 - Use `pg` via Hyperdrive (`env.HYPERDRIVE.connectionString`): one client per request, `ctx.waitUntil(client.end())`, short transactions, no session-level state (`SET` without `LOCAL`, session advisory locks, `LISTEN`). Neon's direct (non-pooled) string goes into Hyperdrive.
 - Use PostgreSQL natively: `uuid`, `timestamptz`, `numeric` for money, CHECK constraints, composite `(clinic_id, id)` foreign keys for tenant isolation, exclusion constraints, JSONB where the data is document-like. No ORM; parameterized SQL (`$1`) only.

@@ -1,6 +1,6 @@
 # Dontalist backend: PostgreSQL (Neon) architecture
 
-Status: **decided 2026-11-20.** PostgreSQL on Neon replaces TiDB/MySQL. `docs/architecture.md` (the TiDB design) is **superseded**; keep it only as history. Nothing in this document counts as built until its roadmap step says so and its tests pass on a real PostgreSQL.
+Status: **decided 2026-11-20.** PostgreSQL on Neon replaces TiDB/MySQL. The old TiDB design was deleted (it stays in git history). Nothing in this document counts as built until its roadmap step says so and its tests pass on a real PostgreSQL.
 
 ## 1. What the code review found
 
