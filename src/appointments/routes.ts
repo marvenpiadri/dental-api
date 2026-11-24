@@ -112,6 +112,33 @@ appointmentRoutes.post('/:id/reschedule', requires('appointments.edit'), async (
   return c.json({ version })
 })
 
+// Edits that are not a move: visit type, reason, note, and (while still movable) which patient it is for. Needs the current version.
+appointmentRoutes.patch('/:id', requires('appointments.edit'), async (c) => {
+  const b = await json(c), p = c.get('principal'), now = c.get('now')
+  if (!Number.isInteger(b.version)) throw bad()
+  for (const k of Object.keys(b)) if (!['version', 'type', 'reason', 'note', 'patientId'].includes(k)) throw bad(`Unknown field "${k}"`)
+  const sets: string[] = [], vals: unknown[] = []
+  const put = (col: string, v: unknown) => { vals.push(v); sets.push(`${col} = $${vals.length}`) }
+  if (b.type !== undefined) put('type', opt(b.type, 32) ?? 'consultation')
+  if (b.reason !== undefined) put('reason', opt(b.reason, 500))
+  if (b.note !== undefined) put('note', opt(b.note, 2000))
+  const patientId = b.patientId === undefined ? null : uuid(b.patientId)
+  if (!sets.length && !patientId) throw bad('nothing to update')
+  const version = await c.get('db').tx(async (db) => {
+    const a = await lockOne(db, p.clinicId, c.req.param('id'))
+    if (a.version !== b.version) throw stale()
+    if (patientId && patientId !== a.patient_id) {
+      if (!MOVABLE.includes(a.status)) throw invalid('the patient can only change while the appointment is scheduled or confirmed')
+      await ownsAll(db, p.clinicId, patientId, null, null); put('patient_id', patientId)
+    }
+    vals.push(toDb(now)); sets.push(`updated_at = $${vals.length}`)
+    vals.push(a.id)
+    await db.run(`UPDATE appointment SET ${sets.join(', ')}, version = version + 1 WHERE id = $${vals.length}`, vals)
+    return a.version + 1
+  })
+  return c.json({ version })
+})
+
 appointmentRoutes.post('/:id/status', requires('appointments.edit'), async (c) => {
   const b = await json(c), p = c.get('principal'), now = c.get('now'), to = typeof b.status === 'string' ? b.status : ''
   const reason = opt(b.reason, 500), version = b.version === undefined ? null : Number.isInteger(b.version) ? (b.version as number) : (() => { throw bad() })()

@@ -105,6 +105,7 @@ recordRoutes.post('/patients/:id/messages', requires('patients.edit'), async (c)
     if (pt.whatsapp_consent === 'declined') throw new ApiError(409, 'consent_declined', 'This patient declined WhatsApp messages')
     if (appt && !(await db.rows('SELECT 1 FROM appointment WHERE id = $1 AND clinic_id = $2 AND patient_id = $3', [appt, p.clinicId, pid])).length) throw notFound()
     await db.run("INSERT INTO message (id, clinic_id, patient_id, kind, text, status, appointment_id, at, created_by) VALUES ($1,$2,$3,$4,$5,'prepared',$6,$7,$8)", [id, p.clinicId, pid, b.kind, str(b.text, 2000, true), appt, toDb(c.get('now')), p.staffId])
+    if (appt && b.kind === 'appointment') await db.run('UPDATE appointment SET reminded_at = $1 WHERE id = $2 AND clinic_id = $3', [toDb(c.get('now')), appt, p.clinicId]) // the visit shows as reminded
   })
   return c.json({ id }, 201)
 })

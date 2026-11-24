@@ -152,3 +152,22 @@ describe('a patient\'s appointment list', () => {
     expect((await h.call('acctA', 'GET', `/v1/patients/${p}/appointments`)).status).toBe(403)
   })
 })
+
+describe('editing an appointment without moving it', () => {
+  it('changes type, reason, note and patient with the version; refuses stale, unknown fields, other clinics, and a patient change once under way', async () => {
+    const id = await idOf(await book({ startAt: iso(6), endAt: iso(6, 30), reason: 'old' }))
+    const ok = await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 1, type: 'cleaning', reason: 'new', note: 'n' })
+    expect(ok.status).toBe(200); expect(await h.json(ok)).toEqual({ version: 2 })
+    expect((await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 1, reason: 'again' })).status).toBe(409)
+    expect((await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 2, startAt: iso(9) })).status).toBe(400)
+    expect((await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 2 })).status).toBe(400)
+    expect((await h.call('recB', 'PATCH', `/v1/appointments/${id}`, { version: 2, reason: 'x' })).status).toBe(404)
+    expect((await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 2, patientId: pB })).status).toBe(404) // another clinic's patient
+    expect((await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 2, patientId: pA2 })).status).toBe(200)
+    const row = (await h.db.rows<{ reason: string; type: string; patient_id: string }>('SELECT reason, type, patient_id FROM appointment WHERE id=$1', [id]))[0]
+    expect(row).toEqual({ reason: 'new', type: 'cleaning', patient_id: pA2 })
+    expect((await h.call('recA', 'POST', `/v1/appointments/${id}/status`, { status: 'arrived' })).status).toBe(200)
+    expect((await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 4, patientId: pA })).status).toBe(422)
+    expect((await h.call('recA', 'PATCH', `/v1/appointments/${id}`, { version: 4, note: 'free text still fine' })).status).toBe(200)
+  })
+})
