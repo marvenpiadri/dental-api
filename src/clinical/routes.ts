@@ -158,6 +158,12 @@ const priceIn = (v: unknown): string => { const s = typeof v === 'number' && Num
 const itemView = (r: Record<string, unknown>) => ({ id: r.id, tooth: r.tooth ?? null, scope: r.scope ?? null, quadrant: r.quadrant ?? null, procedure: r.procedure_id, name: r.name ?? null, price: formatMoney(parseMoney(String(r.price))), currency: r.currency, status: r.status,
   date: r.done_date ?? null, doneAt: r.done_at ?? null, appointmentId: r.appointment_id ?? null })
 const ITEM = 'id, tooth, scope, quadrant, procedure_id, name, price, currency, status, done_date::text AS done_date, done_at, appointment_id'
+/** The day a treatment was done: the given day, or today; never in the future. */
+const doneDay = (v: unknown, now: number): string => {
+  const today = new Date(now).toISOString().slice(0, 10), day = v === undefined || v === null || v === '' ? today : v
+  if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day)) || day > today) throw bad('date must be a day that is not in the future')
+  return day
+}
 const shape = (b: Record<string, unknown>) => {
   const tooth = str(b.tooth, 2), scope = str(b.scope, 10), quadrant = b.quadrant === undefined || b.quadrant === null ? null : b.quadrant
   if (tooth && !TOOTH.test(tooth)) throw bad('Invalid tooth'); if (scope && !SCOPES.includes(scope)) throw bad('Invalid scope')
@@ -182,9 +188,7 @@ clinicalRoutes.post('/patients/:id/plan', requires('clinical.create'), async (c)
   const [cl] = await db.rows<{ currency: string }>('SELECT currency FROM clinic WHERE id = $1', [p.clinicId])
   // The procedure panel records finished work in one step: status "done" with the day it was done (not in the future) and, optionally, the visit.
   const done = b.status === 'done'; if (b.status !== undefined && b.status !== 'planned' && !done) throw bad('Invalid status')
-  const now = c.get('now'), today = new Date(now).toISOString().slice(0, 10)
-  const day = done ? (b.date === undefined ? today : str(b.date, 10, true)!) : null
-  if (done && (!/^\d{4}-\d{2}-\d{2}$/.test(day!) || Number.isNaN(Date.parse(day!)) || day! > today)) throw bad('date must be a day that is not in the future')
+  const now = c.get('now'), day = done ? doneDay(b.date, now) : null
   const appt = done ? str(b.appointmentId, 64) : null; if (appt && !isUuid(appt)) throw bad()
   if (appt && !(await db.rows('SELECT 1 FROM appointment WHERE id = $1 AND clinic_id = $2 AND patient_id = $3', [appt, p.clinicId, c.req.param('id')])).length) throw notFound()
   await db.run('INSERT INTO treatment_item (id, clinic_id, patient_id, tooth, scope, quadrant, procedure_id, name, price, currency, status, created_at, created_by, done_date, done_at, appointment_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
@@ -198,7 +202,7 @@ clinicalRoutes.patch('/plan/:id', requires('clinical.edit'), async (c) => {
   if (b.status === 'done') {
     const now = c.get('now'), appt = str(b.appointmentId, 64); if (appt && !isUuid(appt)) throw bad()
     if (appt && !(await db.rows('SELECT 1 FROM appointment WHERE id = $1 AND clinic_id = $2', [appt, p.clinicId])).length) throw notFound()
-    sets.push("status = 'done'"); set('done_at', toDb(now)); set('done_date', new Date(now).toISOString().slice(0, 10)); set('appointment_id', appt)
+    sets.push("status = 'done'"); set('done_at', toDb(now)); set('done_date', doneDay(b.date, now)); set('appointment_id', appt)
   } else if (b.status !== undefined && b.status !== 'planned') throw bad('Invalid status')
   if (b.price !== undefined) set('price', priceIn(b.price))
   if (b.tooth !== undefined) { const t = str(b.tooth, 2); if (t && !TOOTH.test(t)) throw bad('Invalid tooth'); set('tooth', t) }
