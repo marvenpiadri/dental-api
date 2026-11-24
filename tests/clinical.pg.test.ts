@@ -1,6 +1,6 @@
 // Real PostgreSQL: medical history, the chart (per-tooth revisions, no whole overwrite), exams, restore, treatment plan, isolation.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { harness } from './pg/harness'
+import { harness, NOW } from './pg/harness'
 
 let h: Awaited<ReturnType<typeof harness>>, pid: string, pidB: string
 const P = (s = '') => `/v1/patients/${pid}${s}`
@@ -115,6 +115,14 @@ describe('exams and restore', () => {
     expect((await h.call('ownerA', 'POST', `/v1/exams/${examId}/void`, {})).status).toBe(400)
     expect((await h.call('ownerA', 'POST', `/v1/exams/${examId}/void`, { reason: 'mistake' })).status).toBe(204)
   })
+  it('lists exams with their frozen charts (capped at 10 then), oldest first on request, and rejects bad paging', async () => {
+    const w = await h.json(await h.call('dentA', 'GET', P('/exams?withCharts=true&limit=10')))
+    expect(w.items[0].chart.teeth).toBeTruthy()
+    expect((await h.call('dentA', 'GET', P('/exams?withCharts=true&limit=11'))).status).toBe(400)
+    expect((await h.call('dentA', 'GET', P('/exams?order=sideways'))).status).toBe(400)
+    expect((await h.json(await h.call('dentA', 'GET', P('/exams?order=asc&limit=1')))).items).toHaveLength(1)
+    expect((await h.json(await h.call('dentA', 'GET', P('/exams')))).items[0]).not.toHaveProperty('chart') // the plain list stays light
+  })
   it('an exam of another clinic patient is 404', async () => {
     expect((await h.call('ownerB', 'POST', P('/exams'), {})).status).toBe(404)
   })
@@ -132,6 +140,19 @@ describe('treatment plan', () => {
     expect((await h.call('dentA', 'DELETE', `/v1/plan/${id}`)).status).toBe(409)
     const [row] = await h.db.rows<{ price: string }>('SELECT price FROM treatment_item WHERE id=$1', [id]); expect(row.price).toBe('320.00')
     await expect(h.db.run("UPDATE treatment_item SET price=1 WHERE id=$1", [id])).rejects.toThrow()
+  })
+  it('records finished work in one step with its own day; refuses a future day, a bad status and another patient\'s visit', async () => {
+    const day = new Date(NOW - 3 * 864e5).toISOString().slice(0, 10) // the harness clock is fixed
+    const r = await h.call('dentA', 'POST', P('/plan'), { tooth: '16', procedure: 'filling', price: '400', status: 'done', date: day }); expect(r.status).toBe(201)
+    const id = (await h.json(r)).id
+    const [row] = await h.db.rows<{ status: string; done_date: string; done_at: string | null }>('SELECT status, done_date::text, done_at FROM treatment_item WHERE id=$1', [id])
+    expect(row.status).toBe('done'); expect(row.done_date).toBe(day); expect(row.done_at).toBeTruthy()
+    expect((await h.call('dentA', 'PATCH', `/v1/plan/${id}`, { price: '1' })).status).toBe(409) // frozen like any done item
+    const future = new Date(NOW + 3 * 864e5).toISOString().slice(0, 10)
+    expect((await h.call('dentA', 'POST', P('/plan'), { tooth: '16', procedure: 'x', price: '1', status: 'done', date: future })).status).toBe(400)
+    expect((await h.call('dentA', 'POST', P('/plan'), { tooth: '16', procedure: 'x', price: '1', status: 'done', date: 'yesterday' })).status).toBe(400)
+    expect((await h.call('dentA', 'POST', P('/plan'), { tooth: '16', procedure: 'x', price: '1', status: 'void' })).status).toBe(400)
+    expect((await h.call('dentA', 'POST', P('/plan'), { tooth: '16', procedure: 'x', price: '1', status: 'done', appointmentId: '00000000-0000-4000-8000-000000000000' })).status).toBe(404)
   })
   it('validates input and isolates clinics', async () => {
     for (const bad of [{ tooth: '99', procedure: 'x', price: '1' }, { procedure: 'x', price: '1.005' }, { tooth: '11', price: '1' }, { scope: 'quadrant', procedure: 'x', price: '1' }])

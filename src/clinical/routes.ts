@@ -127,14 +127,18 @@ clinicalRoutes.post('/patients/:id/exams', requires('clinical.create'), async (c
   return c.json({ id }, 201)
 })
 clinicalRoutes.get('/patients/:id/exams', requires('clinical.view'), async (c) => {
-  const p = c.get('principal'), q = c.req.query(), limit = parseLimit(q.limit, 20, 50); if (limit === null) throw bad('limit must be 1-50')
+  // withCharts=true adds each exam's frozen chart (the history and compare views need it); the page is then capped at 10 to bound the response. order=asc reads the oldest first (the "initial" baseline).
+  const p = c.get('principal'), q = c.req.query(), withCharts = q.withCharts === 'true', asc = q.order === 'asc'
+  if (q.order !== undefined && q.order !== 'asc' && q.order !== 'desc') throw bad('order must be asc or desc')
+  const limit = parseLimit(q.limit, withCharts ? 10 : 20, withCharts ? 10 : 50); if (limit === null) throw bad(withCharts ? 'limit must be 1-10 with withCharts' : 'limit must be 1-50')
   const cur = cursorIn(q.cursor); await ownPatient(c.get('db'), p.clinicId, c.req.param('id'))
   const args: unknown[] = [p.clinicId, c.req.param('id')]; let after = ''
-  if (cur) { args.push(cur[0], cur[1]); after = 'AND (at, id) < ($3::timestamptz, $4::uuid)' }
+  if (cur) { args.push(cur[0], cur[1]); after = `AND (at, id) ${asc ? '>' : '<'} ($3::timestamptz, $4::uuid)` }
   args.push(limit + 1)
-  const rows = await c.get('db').rows(`SELECT id, at, dentist_id, note, payload_version, voided_at, void_reason FROM exam WHERE clinic_id = $1 AND patient_id = $2 ${after} ORDER BY at DESC, id DESC LIMIT $${args.length}`, args)
+  const dir = asc ? 'ASC' : 'DESC'
+  const rows = await c.get('db').rows(`SELECT id, at, dentist_id, note, payload_version, voided_at, void_reason${withCharts ? ', chart' : ''} FROM exam WHERE clinic_id = $1 AND patient_id = $2 ${after} ORDER BY at ${dir}, id ${dir} LIMIT $${args.length}`, args)
   const r = page(rows, limit, (x) => encodeCursor(String(x.at), String(x.id)))
-  return c.json({ items: r.items.map((x) => ({ id: x.id, at: x.at, dentistId: x.dentist_id ?? null, note: x.note ?? null, payloadVersion: x.payload_version, voidedAt: x.voided_at ?? null, voidReason: x.void_reason ?? null })), nextCursor: r.nextCursor })
+  return c.json({ items: r.items.map((x) => ({ id: x.id, at: x.at, dentistId: x.dentist_id ?? null, note: x.note ?? null, payloadVersion: x.payload_version, voidedAt: x.voided_at ?? null, voidReason: x.void_reason ?? null, ...(withCharts ? { chart: x.chart } : {}) })), nextCursor: r.nextCursor })
 })
 clinicalRoutes.get('/exams/:id', requires('clinical.view'), async (c) => {
   const id = c.req.param('id'); if (!isUuid(id)) throw notFound()
@@ -176,8 +180,15 @@ clinicalRoutes.post('/patients/:id/plan', requires('clinical.create'), async (c)
   const p = c.get('principal'), b = await body(c), db = c.get('db'), f = shape(b), id = newId()
   await ownPatient(db, p.clinicId, c.req.param('id'))
   const [cl] = await db.rows<{ currency: string }>('SELECT currency FROM clinic WHERE id = $1', [p.clinicId])
-  await db.run('INSERT INTO treatment_item (id, clinic_id, patient_id, tooth, scope, quadrant, procedure_id, name, price, currency, status, created_at, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
-    [id, p.clinicId, c.req.param('id'), f.tooth, f.scope, f.quadrant, f.procedure_id, f.name, priceIn(b.price), cl.currency, 'planned', toDb(c.get('now')), p.staffId])
+  // The procedure panel records finished work in one step: status "done" with the day it was done (not in the future) and, optionally, the visit.
+  const done = b.status === 'done'; if (b.status !== undefined && b.status !== 'planned' && !done) throw bad('Invalid status')
+  const now = c.get('now'), today = new Date(now).toISOString().slice(0, 10)
+  const day = done ? (b.date === undefined ? today : str(b.date, 10, true)!) : null
+  if (done && (!/^\d{4}-\d{2}-\d{2}$/.test(day!) || Number.isNaN(Date.parse(day!)) || day! > today)) throw bad('date must be a day that is not in the future')
+  const appt = done ? str(b.appointmentId, 64) : null; if (appt && !isUuid(appt)) throw bad()
+  if (appt && !(await db.rows('SELECT 1 FROM appointment WHERE id = $1 AND clinic_id = $2 AND patient_id = $3', [appt, p.clinicId, c.req.param('id')])).length) throw notFound()
+  await db.run('INSERT INTO treatment_item (id, clinic_id, patient_id, tooth, scope, quadrant, procedure_id, name, price, currency, status, created_at, created_by, done_date, done_at, appointment_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
+    [id, p.clinicId, c.req.param('id'), f.tooth, f.scope, f.quadrant, f.procedure_id, f.name, priceIn(b.price), cl.currency, done ? 'done' : 'planned', toDb(now), p.staffId, day, done ? toDb(now) : null, appt])
   return c.json({ id }, 201)
 })
 // Planned items can be edited and removed. Marking done is the clinical record: it freezes the item (the database refuses later changes).
