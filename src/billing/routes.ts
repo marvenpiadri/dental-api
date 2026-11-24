@@ -61,7 +61,19 @@ async function list(c: any, table: 'invoice' | 'payment', col: 'issued_at' | 'at
 const INV = 'id, patient_id, kind, number, issued_at, due_on, total, currency, cancels_id, cancelled_at, cancel_reason'
 const PAY = 'id, patient_id, invoice_id, amount, method, at, reference, note, payer_type, payer_id, currency, voided_at, void_reason'
 
-billingRoutes.get('/patients/:id/invoices', requires('billing.view'), (c) => list(c, 'invoice', 'issued_at', INV, invView))
+const lineView = (l: Record<string, unknown>) => ({ itemId: l.item_id ?? null, label: l.label, where: l.where_text ?? null, price: money(l.price) })
+const refundView = (x: Record<string, unknown>) => ({ id: x.id, amount: money(x.amount), method: x.method, at: x.at, reference: x.reference ?? null })
+// withLines=true adds each invoice's lines and a credit note's refunds (page capped at 50 so the response stays bounded).
+billingRoutes.get('/patients/:id/invoices', requires('billing.view'), async (c) => {
+  if (c.req.query().withLines !== 'true') return list(c, 'invoice', 'issued_at', INV, invView)
+  if (Number(c.req.query().limit ?? 25) > 50) throw bad('limit must be 1-50 with withLines')
+  const res = await list(c, 'invoice', 'issued_at', INV, (r) => r)
+  const data = (await res.json()) as { items: Record<string, unknown>[]; nextCursor: string | null }
+  const ids = data.items.map((i) => i.id), db = c.get('db')
+  const lines = ids.length ? await db.rows('SELECT invoice_id, item_id, label, where_text, price FROM invoice_line WHERE invoice_id = ANY($1::uuid[]) ORDER BY invoice_id, position LIMIT 10000', [ids]) : []
+  const refunds = ids.length ? await db.rows('SELECT credit_note_id, id, amount, method, at, reference FROM refund WHERE credit_note_id = ANY($1::uuid[]) ORDER BY at, id LIMIT 5000', [ids]) : []
+  return c.json({ items: data.items.map((r) => ({ ...invView(r), lines: lines.filter((l) => l.invoice_id === r.id).map(lineView), ...(r.kind === 'credit-note' && { refunds: refunds.filter((x) => x.credit_note_id === r.id).map(refundView) }) })), nextCursor: data.nextCursor })
+})
 billingRoutes.get('/patients/:id/payments', requires('billing.view'), (c) => list(c, 'payment', 'at', PAY, payView))
 billingRoutes.get('/patients/:id/balance', requires('billing.view'), async (c) => {
   const p = c.get('principal'), db = c.get('db'); await ownPatient(db, p.clinicId, c.req.param('id'))

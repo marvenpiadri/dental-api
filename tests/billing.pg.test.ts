@@ -121,4 +121,11 @@ describe('payments, balance, refunds', () => {
     expect((await h.call('acctA', 'GET', `/v1/patients/${pid}/invoices?limit=101`)).status).toBe(400)
     expect((await h.call('acctA', 'GET', `/v1/patients/${pid}/payments?cursor=%25%25`)).status).toBe(400)
   })
+  it('withLines returns lines and refunds in one bounded page', async () => {
+    const r = await h.json(await h.call('acctA', 'GET', `/v1/patients/${pid}/invoices?limit=5&withLines=true`))
+    expect(r.items).toHaveLength(5); for (const i of r.items) { expect(i.lines.length).toBeGreaterThan(0); expect(i.total).toMatch(/^-?\d+\.\d\d$/) }
+    expect(r.items.some((i: any) => i.kind === 'credit-note' && Array.isArray(i.refunds))).toBe(true)
+    expect((await h.call('acctA', 'GET', `/v1/patients/${pid}/invoices?limit=51&withLines=true`)).status).toBe(400)
+    expect((await h.call('recB', 'GET', `/v1/patients/${pid}/invoices?withLines=true`)).status).toBe(404)
+  })
 })
