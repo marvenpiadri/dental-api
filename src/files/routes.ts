@@ -27,9 +27,9 @@ const notFound = () => new ApiError(404, 'not_found', 'Not found')
 const forbidden = () => new ApiError(403, 'forbidden', 'Not allowed')
 const cleanName = (s: unknown) => (typeof s === 'string' ? s : '').normalize('NFC').replace(/[\x00-\x1f\x7f/\\"]/g, '').trim().slice(0, 200)
 
-type FileRow = { id: string; clinic_id: string; purpose: string; name: string; content_type: string; size: string; r2_key: string; status: string; patient_id: string | null; lab_order_id: string | null; subject_id: string | null; uploaded_by: string | null; created_at: string }
-const COLS = 'id, clinic_id, purpose, name, content_type, size, r2_key, status, patient_id, lab_order_id, subject_id, uploaded_by, created_at'
-const view = (r: FileRow) => ({ id: r.id, purpose: r.purpose, name: r.name, contentType: r.content_type, size: Number(r.size), patientId: r.patient_id, labOrderId: r.lab_order_id, subjectId: r.subject_id, createdAt: r.created_at })
+type FileRow = { id: string; clinic_id: string; purpose: string; name: string; content_type: string; size: string; r2_key: string; status: string; patient_id: string | null; lab_order_id: string | null; subject_id: string | null; tooth: string | null; uploaded_by: string | null; created_at: string }
+const COLS = 'id, clinic_id, purpose, name, content_type, size, r2_key, status, patient_id, lab_order_id, subject_id, tooth, uploaded_by, created_at'
+const view = (r: FileRow) => ({ id: r.id, purpose: r.purpose, name: r.name, contentType: r.content_type, size: Number(r.size), patientId: r.patient_id, labOrderId: r.lab_order_id, subjectId: r.subject_id, tooth: r.tooth, createdAt: r.created_at })
 const purposeOf = (name: string): Purpose => { const p = PURPOSES[name]; if (!p) throw bad('Unknown purpose'); return p }
 const canView = (p: Purpose, perms: ReadonlySet<Permission>) => p.view.some((x) => perms.has(x))
 
@@ -141,6 +141,15 @@ filesRoutes.post('/files/:id/void', async (c) => {
   const b = await c.req.json().catch(() => null) as { reason?: unknown } | null
   if (!b || typeof b.reason !== 'string' || !b.reason.trim() || b.reason.length > 500) throw bad('A reason is required')
   const n = await c.get('db').run("UPDATE file SET voided_at = $1, void_reason = $2 WHERE id = $3 AND clinic_id = $4 AND voided_at IS NULL AND status = 'ready'", [toDb(c.get('now')), b.reason.trim(), f.id, p.clinicId])
+  if (n !== 1) throw notFound(); return c.body(null, 204)
+})
+// Which tooth a patient picture is about; null clears it. Only for files that belong to a patient, by someone who may add such files.
+filesRoutes.patch('/files/:id', async (c) => {
+  const p = c.get('principal'), f = await load(c.get('db'), c.req.param('id'), p.clinicId), purpose = purposeOf(f.purpose)
+  if (purpose.attach === 'owner' || !p.permissions.has(purpose.create)) throw forbidden()
+  const b = await c.req.json().catch(() => null) as { tooth?: unknown } | null
+  if (!b || !('tooth' in b) || (b.tooth !== null && (typeof b.tooth !== 'string' || !/^[1-8][1-8]$/.test(b.tooth)))) throw bad('tooth must be an FDI number or null')
+  const n = await c.get('db').run("UPDATE file SET tooth = $1 WHERE id = $2 AND clinic_id = $3 AND status = 'ready' AND voided_at IS NULL", [b.tooth, f.id, p.clinicId])
   if (n !== 1) throw notFound(); return c.body(null, 204)
 })
 filesRoutes.delete('/files/:id', async (c) => {

@@ -179,3 +179,17 @@ describe('pictures: attach, replace, remove, purge', () => {
     expect((await h.json(await h.call('recA', 'GET', `/v1/patients/${pid}`))).photoFileId).not.toBeNull() // the live photo is untouched
   })
 })
+
+describe('tooth tag', () => {
+  it('tags and untags a patient picture; rejects bad values, avatars, other clinics and voided files', async () => {
+    const u = await patientFile('clinical_image', PNG, 'image/png'); expect(u.complete!.status).toBe(200)
+    expect((await h.call('dentA', 'PATCH', `/v1/files/${u.id}`, { tooth: '16' })).status).toBe(204)
+    const l = await h.json(await h.call('dentA', 'GET', `/v1/patients/${pid}/files`)); expect(l.items.find((x: any) => x.id === u.id).tooth).toBe('16')
+    for (const bad of [{ tooth: '19' }, { tooth: '1' }, { tooth: 16 }, {}]) expect((await h.call('dentA', 'PATCH', `/v1/files/${u.id}`, bad)).status).toBe(400)
+    expect((await h.call('dentA', 'PATCH', `/v1/files/${u.id}`, { tooth: null })).status).toBe(204)
+    expect((await h.call('recA', 'PATCH', `/v1/files/${u.id}`, { tooth: '11' })).status).toBe(403)
+    expect((await h.call('ownerB', 'PATCH', `/v1/files/${u.id}`, { tooth: '11' })).status).toBe(404)
+    expect((await h.call('dentA', 'POST', `/v1/files/${u.id}/void`, { reason: 'wrong patient' })).status).toBe(204)
+    expect((await h.call('dentA', 'PATCH', `/v1/files/${u.id}`, { tooth: '11' })).status).toBe(404)
+  })
+})
