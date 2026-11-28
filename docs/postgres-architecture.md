@@ -149,7 +149,7 @@ Known limit: search with `LIKE '%x%'` across name, phone and number cannot use t
 
 ## Status 2026-11-28: operator console and public directory
 
-- **Migration 0016** (`clinic_subscription`, unique public address index). Written and proven on a local PostgreSQL only. **Not applied to Neon** (needs the owner's approval).
+- **Migration 0016** (`clinic_subscription`, unique public address index). **Applied to Neon 2026-11-28** with the owner's approval, checksum `9ba8e89f…07b4` recorded; `dontalist_rt` has SELECT/INSERT/UPDATE/DELETE on the new table, `anonymous` and `authenticated` have nothing.
 - **Operator API** `/v1/admin/*`: guarded by the `ADMIN_TOKEN` Worker secret (header `x-dontalist-admin`, 32+ characters; without it the API answers 404). Creates a clinic with its owner, public profile and first subscription period in one transaction; edits the profile (version-checked); adds and removes subscription periods (no overlaps). Clinics cannot reach it and cannot change their subscription.
 - **Public API** `GET /v1/public/clinics`: no sign-in; lists a clinic only while a subscription period covers today AND its profile is `published`. Paginated (default 15, max 50), filtered by city and search in SQL, public fields only.
 - **Clinics edit their own public profile** with the existing `PUT /v1/clinic/profile` (owner role). A taken public address answers 409.
