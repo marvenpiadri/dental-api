@@ -15,6 +15,8 @@ import { visitRoutes } from './visits/routes'
 import { libraryRoutes } from './library/routes'
 import { mergeRoutes } from './patients/merge'
 import { reportRoutes } from './reports/routes'
+import { publicRoutes } from './public/routes'
+import { adminRoutes } from './admin/routes'
 import { pgDb } from './db/client'
 import { s3Store } from './files/store'
 import { httpPasswordService } from './auth/password-service'
@@ -31,6 +33,8 @@ export function createApp(deps: Deps = { db: (env) => pgDb(env.DATABASE_URL ?? '
   app.route('/v1/patients', mergeRoutes) // before patientRoutes: '/duplicate-check' must not be read as an :id
   app.route('/v1/patients', patientRoutes)
   app.route('/v1/appointments', appointmentRoutes)
+  app.route('/v1/public', publicRoutes) // before the '/v1' mounts below: their sign-in check must not run for these
+  app.route('/v1/admin', adminRoutes)
   app.route('/v1', resourceRoutes)
   app.route('/v1', billingRoutes)
   app.route('/v1', clinicalRoutes)

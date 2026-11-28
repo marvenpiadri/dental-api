@@ -40,7 +40,7 @@ export const security = [
   secureHeaders({ crossOriginResourcePolicy: 'same-site', referrerPolicy: 'no-referrer' }),
   // Exact-origin allow-list from configuration; credentials on; no wildcard.
   createMiddleware<AppEnv>((c, next) =>
-    cors({ origin: (o) => (c.get('config').corsOrigins.includes(o) ? o : null), credentials: true, allowHeaders: ['Content-Type', CSRF_HEADER], allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], maxAge: 600 })(c, next)),
+    cors({ origin: (o) => (c.get('config').corsOrigins.includes(o) ? o : null), credentials: true, allowHeaders: ['Content-Type', CSRF_HEADER, 'X-Dontalist-Admin'], allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], maxAge: 600 })(c, next)),
   // Cookie-authenticated mutations must come from an allowed origin AND carry the CSRF header.
   createMiddleware<AppEnv>(async (c, next) => {
     if (UNSAFE.has(c.req.method)) {

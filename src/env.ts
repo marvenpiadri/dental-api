@@ -12,6 +12,8 @@ export type Bindings = {
   PASSWORD_SERVICE_SECRET?: string // secret, 32+ characters, the same value as the function's HASH_SECRET
   /** Only to verify LEGACY `pbkdf2$` hashes until they have all been upgraded at login. Never used for new hashes. */
   PASSWORD_PEPPER?: string
+  /** Operator token for /v1/admin (the owner of Dontalist, not a clinic user). Secret, 32+ characters. Unset or shorter: the admin API does not exist (404). */
+  ADMIN_TOKEN?: string
   // Per-environment settings (wrangler.jsonc `vars`). Nothing here is hardcoded in code.
   APP_ORIGIN: string // e.g. https://dontalist.com
   API_ORIGIN: string // e.g. https://api.dontalist.com

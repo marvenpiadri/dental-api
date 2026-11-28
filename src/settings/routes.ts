@@ -5,6 +5,7 @@ import type { AppEnv } from '../http/context'
 import { isUuid, newId } from '../lib/ids'
 import { toDb } from '../lib/time'
 import { formatMoney, parseMoney } from '../lib/money'
+import { DuplicateKeyError } from '../db/client'
 
 /** Clinic identity and finance settings, the public profile, closures and the price list. Everyone signed in can read (the app needs currency, hours, prices); changing needs settings.edit (profile: the owner). */
 export const settingsRoutes = new Hono<AppEnv>()
@@ -22,7 +23,7 @@ const clean = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(
 const noExtra = (b: Record<string, unknown>, keys: readonly string[]) => { for (const k of Object.keys(b)) if (!keys.includes(k)) throw bad(`Unknown field "${k}"`) }
 
 const SETTINGS_KEYS = ['legalName', 'taxId', 'bank', 'invoiceNote', 'paymentDays', 'address', 'phone', 'email', 'website', 'countryCode', 'city', 'postalCode', 'hours', 'payerTypes', 'payers', 'customProviders', 'logo'] as const
-function settingsIn(b: Record<string, unknown>) {
+export function settingsIn(b: Record<string, unknown>) {
   noExtra(b, SETTINGS_KEYS)
   const pd = b.paymentDays; if (pd !== undefined && (!Number.isInteger(pd) || (pd as number) < 0 || (pd as number) > 365)) throw bad('paymentDays must be 0-365')
   const cc = text(b.countryCode, 2); if (cc && !/^[A-Z]{2}$/.test(cc)) throw bad('countryCode must be ISO 3166-1 alpha-2')
@@ -35,7 +36,7 @@ function settingsIn(b: Record<string, unknown>) {
     logo: imageUrl(b.logo, 300_000) })
 }
 const PROFILE_KEYS = ['state', 'displayName', 'intro', 'description', 'cover', 'gallery', 'whatsapp', 'website', 'instagram', 'facebook', 'countryCode', 'country', 'region', 'city', 'lat', 'lng', 'placeId', 'slug', 'previousSlugs', 'languages', 'services', 'specialties', 'publishedAt'] as const
-function profileIn(b: Record<string, unknown>) {
+export function profileIn(b: Record<string, unknown>) {
   noExtra(b, PROFILE_KEYS)
   if (!['draft', 'published', 'unpublished', 'closed'].includes(String(b.state))) throw bad('Invalid state')
   const num = (v: unknown, lo: number, hi: number) => { if (v === undefined) return undefined; if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi) throw bad(); return v }
@@ -82,7 +83,7 @@ settingsRoutes.put('/clinic/profile', requires('profile.edit'), async (c) => {
     if (r.profile_version !== b.expectedVersion) throw new ApiError(409, 'stale', 'The profile changed; reload and try again')
     await db.run('UPDATE clinic_settings SET profile = $1::jsonb, profile_version = profile_version + 1, updated_at = $2 WHERE clinic_id = $3', [JSON.stringify(pr), now, p.clinicId])
     return r.profile_version + 1
-  })
+  }).catch((e) => { throw e instanceof DuplicateKeyError ? new ApiError(409, 'slug_taken', 'Another clinic already uses this address') : e })
   return c.json({ version: v })
 })
 

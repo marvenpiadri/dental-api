@@ -146,3 +146,12 @@ Known limit: search with `LIKE '%x%'` across name, phone and number cannot use t
 - **Data location (owner decision 2026-11-23):** Neon in eu-central-1 and R2 in WEUR are accepted; the Law 09-08/CNDP point is not treated as a blocker.
 - **Patient map link:** `patient.map_url`, only `https://maps.google.com/?ll=<lat>,<lng>` (checked in the API and by a CHECK constraint; migration 0011).
 - **Still open:** Worker deploy and secrets (`DATABASE_URL`, `R2_*`, `PASSWORD_SERVICE_*`), a real backup drill on Neon, the frontend wiring (stages S2-S8).
+
+## Status 2026-11-28: operator console and public directory
+
+- **Migration 0016** (`clinic_subscription`, unique public address index). Written and proven on a local PostgreSQL only. **Not applied to Neon** (needs the owner's approval).
+- **Operator API** `/v1/admin/*`: guarded by the `ADMIN_TOKEN` Worker secret (header `x-dontalist-admin`, 32+ characters; without it the API answers 404). Creates a clinic with its owner, public profile and first subscription period in one transaction; edits the profile (version-checked); adds and removes subscription periods (no overlaps). Clinics cannot reach it and cannot change their subscription.
+- **Public API** `GET /v1/public/clinics`: no sign-in; lists a clinic only while a subscription period covers today AND its profile is `published`. Paginated (default 15, max 50), filtered by city and search in SQL, public fields only.
+- **Clinics edit their own public profile** with the existing `PUT /v1/clinic/profile` (owner role). A taken public address answers 409.
+- Tests: 219 pass on real PostgreSQL (the new file `tests/admin-public.pg.test.ts` has 12). The console UI was also driven in a browser against this API.
+- Not built: images in public profiles (the 64 KB body limit blocks data URLs; they belong on R2), a single-clinic public endpoint for the app's public clinic page, rate limiting on the operator token (use a long random token).
